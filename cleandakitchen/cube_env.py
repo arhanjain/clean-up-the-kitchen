@@ -1,7 +1,7 @@
 
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
-from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
+from omni.isaac.lab.envs import ManagerBasedRLEnvCfg, ManagerBasedRLEnv
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
 from omni.isaac.lab.managers import EventTermCfg as EventTerm
 from omni.isaac.lab.managers import ObservationGroupCfg as ObsGroup
@@ -24,6 +24,7 @@ from . import mdp
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
+from gymnasium import Wrapper
 
 @configclass
 class CubeSceneCfg(InteractiveSceneCfg):
@@ -36,6 +37,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = FRANKA_PANDA_HIGH_PD_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot"
     )
+
     # robot.init_state.pos = (0.0, 0.0, 4.05)
     # robot = None
 
@@ -133,7 +135,7 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),
         debug_vis=True,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0.0, 0.0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
+            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0, 0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
         ),
     )
 
@@ -147,10 +149,15 @@ class ActionsCfg:
         asset_name="robot",
         joint_names=["panda_joint.*"],
         body_name="panda_hand",
-        controller=DifferentialIKControllerCfg(command_type="pose", use_relative_mode=True, ik_method="dls"),
-        scale=0.5,
-        body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=[0.0, 0.0, 0.107]),
+        controller=DifferentialIKControllerCfg(command_type="pose", use_relative_mode=False, ik_method="dls"),
+        body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=[0.0, 0.0, 0.0]),
     )
+    # body_joint_pos = mdp.JointPositionActionCfg(
+    #     asset_name="robot",
+    #     joint_names=["panda_joint.*"],
+    #     scale=1.0,
+    #     use_default_offset=True,
+    # )
     finger_joint_pos: mdp.BinaryJointPositionActionCfg = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
         joint_names=["panda_finger.*"],
@@ -283,3 +290,29 @@ class CubeEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 1024 * 1024 * 4
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
+
+
+class TestWrapper(Wrapper):
+    def __init__(self, env: ManagerBasedRLEnv):
+        if not isinstance(env.unwrapped, ManagerBasedRLEnv):
+            raise ValueError("Environment must be a ManagerBasedRLEnv...")
+
+        # self.env = env 
+        # self.scene = env.scene
+        super().__init__(env)
+    
+    def get_joint_info(self):
+        # Specify robot-specific parameters
+        robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
+        robot_entity_cfg.resolve(self.scene)
+
+        joint_pos = self.scene["robot"].data.joint_pos[:, robot_entity_cfg.joint_ids]
+        joint_vel = self.scene["robot"].data.joint_vel[:, robot_entity_cfg.joint_ids]
+        joint_names = self.scene["robot"].data.joint_names
+
+        return joint_pos, joint_vel, joint_names
+
+    def goal_pose(self):
+        return mdp.generated_commands(self.env, "object_pose")
+    # def object_pos(self):
+    #     return self.env.

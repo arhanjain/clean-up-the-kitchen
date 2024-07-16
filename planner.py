@@ -5,10 +5,11 @@ from curobo.geom.sdf.world import CollisionCheckerType
 from curobo.geom.types import WorldConfig
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
-from curobo.types.robot import JointState
+from curobo.types.robot import CudaRobotModelConfig, JointState, RobotConfig
 from curobo.types.state import JointState
 from curobo.util.logger import log_error, setup_curobo_logger
 from curobo.util.usd_helper import UsdHelper
+from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel
 from curobo.util_file import (
     get_assets_path,
     get_filename,
@@ -27,68 +28,82 @@ from curobo.wrap.reacher.motion_gen import (
 
     
 class MotionPlanner:
-    def __init__(self, scene, device):
+    def __init__(self, env):
         usd_help = UsdHelper()
+
+        usd_help.load_stage(env.scene.stage)
+        offset = 2.5
+        pose = Pose.from_list([0,0,0,1,0,0,0])
+
+        for i in range(env.num_envs):
+            usd_help.add_subroot("/World", f"/World/world_{i}", pose)
+            pose.position[0,1] += offset
+
         self.tensor_args = TensorDeviceType()
 
-        robot_cfg = load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"]
-        world_cfg = WorldConfig.from_dict(
-            load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+        robot_cfg = RobotConfig.from_dict(
+            load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"], 
+            self.tensor_args,
         )
+    
+        world_cfg_list = []
+        for i in range(env.num_envs):
+            world_cfg = WorldConfig.from_dict(
+                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+            )
+            usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            world_cfg_list.append(world_cfg)
 
         trajopt_dt = None
         optimize_dt = True
         trajopt_tsteps = 16
         trim_steps = None
         max_attempts = 4
-        interpolation_dt = 0.05
+        interpolation_dt = 0.01
         motion_gen_config = MotionGenConfig.load_from_robot_config(
             robot_cfg,
-            world_cfg,
+            world_cfg_list,
             self.tensor_args,
             collision_checker_type=CollisionCheckerType.MESH,
-            num_trajopt_seeds=12,
-            num_graph_seeds=12,
+            use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
             collision_cache={"obb": 30, "mesh": 100},
-            optimize_dt=optimize_dt,
-            trajopt_dt=trajopt_dt,
-            trajopt_tsteps=trajopt_tsteps,
-            trim_steps=trim_steps,
+            # maximum_trajectory_dt=0.25, 
         )
         self.motion_gen = MotionGen(motion_gen_config)
-        print("warming up...")
-        self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
+        # print("warming up...")
+        # self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
         print("Curobo is ready!")
 
         self.plan_config = MotionGenPlanConfig(
             enable_graph=False,
-            enable_graph_attempt=2,
+            # enable_graph_attempt=2,
             max_attempts=max_attempts,
-            enable_finetune_trajopt=True,
-            parallel_finetune=True,
+            # enable_finetune_trajopt=True,
         )
 
-        usd_help.load_stage(scene.stage)
-        usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        # usd_help.add_world_to_stage(world_cfg, base_frame="/World")
 
-        self.device = device
+        self.device = env.device
+
+        # Forward kinematics
+        self.kin_model = CudaRobotModel(robot_cfg.kinematics)
 
         # update obstacles and stuff
     
-    def plan(self, jp, jv, jn, goal):
+    def plan(self, jp, jv, jn, goal, mode="joint_pos"):
 
         cu_js = JointState(
             position=self.tensor_args.to_device(jp),
-            velocity=self.tensor_args.to_device(jv),
+            velocity=self.tensor_args.to_device(jv) * 0.0,
             acceleration=self.tensor_args.to_device(jv)* 0.0,
             jerk=self.tensor_args.to_device(jv) * 0.0,
             joint_names=jn
         )
         cu_js = cu_js.get_ordered_joint_state(self.motion_gen.kinematics.joint_names)
 
-        goal_pos = torch.tensor(goal[0:3], device=self.device)
-        goal_orientation = torch.tensor(goal[3:7], device=self.device)
+        goal_pos = torch.tensor(goal[:, 0:3], device=self.device)
+        goal_orientation = torch.tensor(goal[:, 3:7], device=self.device)
 
         #     joint_pos_des
         #compute curobo sol
@@ -97,93 +112,33 @@ class MotionPlanner:
             quaternion=goal_orientation
         )
         self.plan_config.pose_cost_metric = None
-        # result = self.motion_gen.plan_single(cu_js, ik_goal.unsqueeze(0), self.plan_config)
-        result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
-        # breakpoint()
-        traj = result.get_interpolated_plan()
-
-        return traj
-        # info = self.motion_gen.kinematics.forward(traj.position)
-        # ee_pos, ee_quat = info[0], info[1]
-
-
-# def move_to_cartesian_pose(
-#     target_pose,
-#     gripper,
-#     motion_planner,
-#     controller,
-#     env,
-#     progress_threshold=1e-3,
-#     max_iter_per_waypoint=20,
-# ):
-
-#     controller.reset()
-
-#     start = env.unwrapped._robot.get_ee_pose().copy()
-#     start = np.concatenate((start[:3], euler_to_quat_mujoco(start[3:])))
-#     target_pose = target_pose.copy()
-
-#     if target_pose[5] > np.pi / 2:
-#         target_pose[5] -= np.pi
-#     if target_pose[5] < -np.pi / 2:
-#         target_pose[5] += np.pi
-
-#     goal = np.concatenate((target_pose[:3], euler_to_quat_mujoco(target_pose[3:])))
-#     qpos_plan = motion_planner.plan_motion(start, goal, return_ee_pose=True)
-
-#     steps = 0
-#     imgs = []
-
-#     # first waypoint is current pose -> start from i=1
-#     for i in range(len(qpos_plan.ee_position)-1):
-#         des_pose = np.concatenate(
-#             (
-#                 qpos_plan.ee_position[i+1].cpu().numpy(),
-#                 quat_to_euler_mujoco(qpos_plan.ee_quaternion[i].cpu().numpy()),
-#             )
-#         )
-#         last_curr_pose = env.unwrapped._robot.get_ee_pose()
-
-#         for j in range(max_iter_per_waypoint):
-
-#             # get current pose
-#             curr_pose = env.unwrapped._robot.get_ee_pose()
-
-#             # run PD controller
-#             act = controller.update(curr_pose, des_pose)
-#             act = np.concatenate((act, [gripper]))
-
-#             # step env
-#             obs, _, _, _ = env.step(act)
-#             steps += 1
-         
-
-#             image = obs[f"front_rgb"]
+        # result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
+        result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
+        traj = result.get_paths()
+        if mode == "joint_pos":
+            return traj
+        elif mode == "ee_pose":
+            ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
+            
+            return ee_trajs
+        else:
+            raise ValueError("Invalid mode...")
     
-#             # import cv2
-#             # cv2.imshow('Real-time video', cv2.cvtColor(image,
-#             #                                            cv2.COLOR_BGR2RGB))
+    def pad_and_format(self, trajs):
+            # pad out all
+            trajs = [torch.cat((traj.ee_position, traj.ee_quaternion), dim=1) for traj in trajs]
+            timesteps = max([len(traj) for traj in trajs])
 
-#             # # Press 'q' on the keyboard to exit the loop
-#             # if cv2.waitKey(1) & 0xFF == ord('q'):
-#             #     break
+            padded_tensors = []
+            for traj in trajs:
+                pad_val = traj[-1]
+                padded_tensor = pad_val.repeat(timesteps, 1)
+                padded_tensor[:traj.shape[0]] = traj
+                padded_tensors.append(padded_tensor)
 
-#             curr_pose = env.unwrapped._robot.get_ee_pose()
-#             pos_diff = curr_pose[:3] - last_curr_pose[:3]
-#             angle_diff = curr_pose[3:] - last_curr_pose[3:]
-#             angle_diff = np.arctan2(np.sin(angle_diff), np.cos(angle_diff))
-#             err = np.linalg.norm(pos_diff) + np.linalg.norm(angle_diff)
+            padded_tensors = torch.stack(padded_tensors).to(self.device).permute(1,0,2)
 
-#             # early stopping when actions don't change position anymore
-#             # 5x more accuracy for last 3 steps
-#             # if i > len(qpos_plan.ee_position) - 3:
-#             #     if err < progress_threshold / 5:
-#             #         break
-#             # elif err < progress_threshold:
-#             #     break
-#             if err < progress_threshold:
-#                 break
-
-#             last_curr_pose = curr_pose
-
-#     return imgs, steps
+            return padded_tensors
+    
+    def fk(self, jp):
+        return self.kin_model.get_state(jp)

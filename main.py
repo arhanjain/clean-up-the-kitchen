@@ -38,59 +38,12 @@ from omni.isaac.lab.markers import VisualizationMarkers
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.utils.math import subtract_frame_transforms
+from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 
 from planner import MotionPlanner
+from cleandakitchen import TestWrapper
+import cleandakitchen
 
-@configclass
-class TableTopSceneCfg(InteractiveSceneCfg):
-    """Configuration for a cart-pole scene."""
-
-    # ground plane
-    ground = AssetBaseCfg(
-        prim_path="/World/defaultGroundPlane",
-        spawn=sim_utils.GroundPlaneCfg(),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -1.05)),
-    )
-
-    # lights
-    dome_light = AssetBaseCfg(
-        prim_path="/World/Light", spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75))
-    )
-
-    # mount
-    table = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Table",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd", scale=(2.0, 2.0, 2.0)
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 1.05))
-    )
-
-    #cube 1
-    cube_one = RigidObjectCfg(
-        prim_path="{ENV_REGEX_NS}/Cube1",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.05, 0.05, 0.05),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
-            collision_props=sim_utils.CollisionPropertiesCfg()
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.25, 0.3, 1.2))
-    )
-    # cube_two = RigidObjectCfg(
-    #     prim_path="{ENV_REGEX_NS}/Cube2",
-    #     spawn=sim_utils.CuboidCfg(
-    #         size=(0.2, 0.2, 0.2),
-    #         rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-    #         mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
-    #         collision_props=sim_utils.CollisionPropertiesCfg()
-    #     ),
-    #     init_state=RigidObjectCfg.InitialStateCfg(pos=(0.25, -0.3, 0.25))
-    # )
-
-    # articulation
-    robot = FRANKA_PANDA_HIGH_PD_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-    robot.init_state.pos = (0.0, 0.0, 1.05)
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     robot = scene["robot"]
@@ -157,25 +110,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
     diff_ik_controller.set_command(ik_commands)
 
     while simulation_app.is_running():
-        # reset
-        # if count % 150 == 0:
-            # reset time
-        # else:
-            # # obtain quantities from simulation
-            # jacobian = robot.root_physx_view.get_jacobians()[:, ee_jacobi_idx, :, robot_entity_cfg.joint_ids]
-            # ee_pose_w = robot.data.body_state_w[:, robot_entity_cfg.body_ids[0], 0:7]
-            # root_pose_w = robot.data.root_state_w[:, 0:7]
-            # joint_pos = robot.data.joint_pos[:, robot_entity_cfg.joint_ids]
-            # # compute frame in root frame
-            # ee_pos_b, ee_quat_b = subtract_frame_transforms(
-            #     root_pose_w[:, 0:3], root_pose_w[:, 3:7], ee_pose_w[:, 0:3], ee_pose_w[:, 3:7]
-            # )
-            # # compute the joint commands
-            # joint_pos_des = diff_ik_controller.compute(ee_pos_b, ee_quat_b, jacobian, joint_pos)
-        # if count % 500 == 0:
-            # switch goal
-        # goal_idx = 0 if goal_idx and goal_idx != 0 else 1
-        # goal = np.array(goals[goal_idx])
         block = scene["cube_one"].data.root_pos_w - robot.data.root_pos_w
         quat = torch.tensor([[0, 0.707,0.707,0]], device=sim.device)
         goal = torch.cat([block, quat], dim=1)
@@ -246,42 +180,40 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
 
 def main():
-    # sim_cfg = sim_utils.SimulationCfg(dt=0.01)
-    # sim = sim_utils.SimulationContext(sim_cfg)
-
-    # scene_cfg = TableTopSceneCfg(num_envs=1, env_spacing=2.0)
-    # scene = InteractiveScene(scene_cfg)
-    # # Play the simulator
-    # sim.reset()
-    # # Now we are ready!
-    # print("[INFO]: Setup complete...")
-    # # Run the simulator
-    # run_simulator(sim, scene)
-
-     # create environment configuration
-    import cleandakitchen
-    """Random actions agent with Isaac Lab environment."""
     # create environment configuration
     env_cfg = parse_env_cfg(
         args_cli.task, use_gpu=not args_cli.cpu, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
+    env = TestWrapper(env)
 
     # print info (this is vectorized environment)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
     env.reset()
+    planner = MotionPlanner(env)
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode
+        joint_pos, joint_vel, joint_names = env.get_joint_info()
+        # goal = torch.tensor([0.5, -0.5, 0.7, 0.707, 0, 0.707, 0]).repeat(env.num_envs, 1).to(env.unwrapped.device)
+        goal = env.command_manager.get_command("object_pose")
+        plan = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
+        plan = planner.pad_and_format(plan)
         with torch.inference_mode():
-            # sample actions from -1 to 1
-            actions = 2 * torch.rand(env.action_space.shape, device=env.unwrapped.device) - 1
-            # apply actions
-            env.step(actions)
+            # for p in plan[0]:
+            for pose in plan:
+                # joint_pos, joint_vel, joint_names = env.get_joint_info()
+                # cur_pose = planner.fk(joint_pos)
+                # print(f"EE Pose: {cur_pose.ee_position}")
+                # print(f"Desired Pose: {pose}")
+                gripper = torch.ones(env.num_envs, 1).to(0)
+                action = torch.cat((pose, gripper), dim=1)
+                env.step(action)
 
+            # env.reset()
     # close the simulator
     env.close()
 
