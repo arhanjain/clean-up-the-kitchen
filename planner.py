@@ -23,6 +23,7 @@ from curobo.wrap.reacher.motion_gen import (
     MotionGen,
     MotionGenConfig,
     MotionGenPlanConfig,
+    MotionGenStatus,
     PoseCostMetric,
 )
 
@@ -51,7 +52,7 @@ class MotionPlanner:
             world_cfg = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            # usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
             world_cfg_list.append(world_cfg)
 
         trajopt_dt = None
@@ -114,13 +115,15 @@ class MotionPlanner:
         self.plan_config.pose_cost_metric = None
         # result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
         result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
+        if result.status ==MotionGenStatus.TRAJOPT_FAIL:
+            return None, False
         traj = result.get_paths()
         if mode == "joint_pos":
-            return traj
+            return traj, True
         elif mode == "ee_pose":
             ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
             
-            return ee_trajs
+            return ee_trajs, True
         else:
             raise ValueError("Invalid mode...")
     

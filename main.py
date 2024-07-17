@@ -3,7 +3,6 @@ import argparse
 from omni.isaac.lab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="test")
-parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environments.")
 parser.add_argument("--cpu", action="store_true", default=False, help="Use CPU pipeline.")
 parser.add_argument(
     "--disable_fabric", action="store_true", default=False, help="Disable fabric and use USD I/O operations."
@@ -195,23 +194,33 @@ def main():
     env.reset()
     planner = MotionPlanner(env)
     # simulate environment
+    print("begin!")
     while simulation_app.is_running():
         # run everything in inference mode
         joint_pos, joint_vel, joint_names = env.get_joint_info()
         # goal = torch.tensor([0.5, -0.5, 0.7, 0.707, 0, 0.707, 0]).repeat(env.num_envs, 1).to(env.unwrapped.device)
         goal = env.command_manager.get_command("object_pose")
-        plan = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
-        plan = planner.pad_and_format(plan)
+        plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
         with torch.inference_mode():
-            # for p in plan[0]:
+            if not success:
+                env.reset()
+                continue
+            plan = planner.pad_and_format(plan)
             for pose in plan:
                 # joint_pos, joint_vel, joint_names = env.get_joint_info()
                 # cur_pose = planner.fk(joint_pos)
                 # print(f"EE Pose: {cur_pose.ee_position}")
                 # print(f"Desired Pose: {pose}")
                 gripper = torch.ones(env.num_envs, 1).to(0)
-                action = torch.cat((pose, gripper), dim=1)
+                # print(f"pose: {pose.shape} gripper: {gripper.shape}")
+                try:
+                    # pose = torch.unique(pose1, dim=0) # work around for dups in motion plan
+                    action = torch.cat((pose, gripper), dim=1)
+                except:
+                    breakpoint()
+                    plan = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
                 env.step(action)
+                im = env.get_camera_data()
 
             # env.reset()
     # close the simulator
