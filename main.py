@@ -40,8 +40,8 @@ from omni.isaac.lab.utils.math import subtract_frame_transforms
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 
 from planner import MotionPlanner
-from cleandakitchen import TestWrapper
-import cleandakitchen
+from customenv import TestWrapper
+import customenv
 
 
 def main():
@@ -57,7 +57,8 @@ def main():
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
-    env.reset()
+    obs, info = env.reset()
+    camera_data = env.get_camera_data()
     planner = MotionPlanner(env)
     # simulate environment
     print("begin!")
@@ -73,14 +74,8 @@ def main():
                 continue
             plan = planner.pad_and_format(plan)
             for pose in plan:
-                # joint_pos, joint_vel, joint_names = env.get_joint_info()
-                # cur_pose = planner.fk(joint_pos)
-                # print(f"EE Pose: {cur_pose.ee_position}")
-                # print(f"Desired Pose: {pose}")
                 gripper = torch.ones(env.num_envs, 1).to(0)
-                # print(f"pose: {pose.shape} gripper: {gripper.shape}")
                 try:
-                    # pose = torch.unique(pose1, dim=0) # work around for dups in motion plan
                     action = torch.cat((pose, gripper), dim=1)
                 except:
                     breakpoint()
@@ -88,7 +83,6 @@ def main():
                 env.step(action)
                 im = env.get_camera_data()
 
-            # env.reset()
     # close the simulator
     env.close()
 

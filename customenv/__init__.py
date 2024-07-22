@@ -1,6 +1,7 @@
 import gymnasium as gym
 
-from .cube_env import CubeEnvCfg, TestWrapper
+from .cube_env import CubeEnvCfg
+from .wrapper import TestWrapper
 
 gym.register(
     id="Cube-Test-v0",
