@@ -42,6 +42,7 @@ def load_and_predict(cfg, meta_data, rgb, depth, seg):
         'placement_confidence': [],
         'placement_contacts': []
     }
+    # Aggregates results (grasps)
     for _ in range(cfg.eval.num_runs):
         pt_idx = sample_points(xyz, cfg.data.num_points)
         data['inputs'] = inputs[pt_idx]
@@ -68,12 +69,12 @@ def load_and_predict(cfg, meta_data, rgb, depth, seg):
 def load_rgb_xyz(
     meta_data, rgb, depth, seg, robot_prob, world_coord, jitter_scale, grid_res, surface_range=0
 ):
-    depth = depth[0]
+    depth = depth[0].cpu()
     normalized_rgb = normalize_rgb(rgb[0][:, :, :3].float().cpu().numpy() / 255.0)
     xyz = torch.from_numpy(
-        depth_to_xyz(depth, meta_data['intrinsics'])
+        depth_to_xyz(depth.cpu().numpy(), meta_data['intrinsics'])
     ).float()
-    seg = torch.from_numpy(np.array(seg.cpu()))
+    seg = torch.from_numpy(seg)
     normalized_rgb = normalized_rgb.permute(1, 2, 0)
     label_map = meta_data['label_map']
 

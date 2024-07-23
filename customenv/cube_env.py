@@ -42,7 +42,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot"
     )
 
-    # whole scene cant be 1 rigid object
+    # # whole scene cant be 1 rigid object
     object = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Object",
         init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.05], rot=[1, 0, 0, 0]),
@@ -61,6 +61,15 @@ class CubeSceneCfg(InteractiveSceneCfg):
         ),
     )
 
+    # Table
+    table = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/Table",
+        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
+            # semantic_tags=[("class", "table")]
+            ),
+    )
 
     # plane
     plane = AssetBaseCfg(
@@ -113,43 +122,46 @@ class CubeSceneCfg(InteractiveSceneCfg):
             ],
         )
 
-        # parse and add USD
-        objs = {}
-        usd_path = "/home/arhan/Downloads/scene/model.usda"
-        # usd_path = "/home/arhan/Downloads/scene/model.usda"
-        usd_stage = Usd.Stage.Open(usd_path)
+        # # parse and add USD
+        # objs = {}
+        # usd_path = "/home/jacob/Downloads/test/model.usda"
+        # # usd_path = "/home/arhan/Downloads/scene/model.usda"
+        # usd_stage = Usd.Stage.Open(usd_path)
         
-        # rot = convert_orientation_convention(torch.tensor([1,0,0,0])[None], "world", "opengl").squeeze().tolist()
-        for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
-            name = entry.GetName()
-            transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-            transform = torch.tensor(transform)
-            pos, quat = pos_and_quat_from_matrix(transform)
-            objs[name] = RigidObjectCfg(
-                prim_path=f"{{ENV_REGEX_NS}}/{name}",
-                init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-                spawn=usd_utils.CustomRigidUSDCfg(
-                    usd_path=usd_path,
-                    usd_sub_path=entry.GetPath().pathString,
-                    rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
-                    collision_props=CollisionPropertiesCfg(),
-                    semantic_tags=[("class", "obj")],
-                )
-            )
+        # # rot = convert_orientation_convention(torch.tensor([1,0,0,0])[None], "world", "opengl").squeeze().tolist()
+        # for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
+        #     name = entry.GetName()
+        #     transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+        #     transform = torch.tensor(transform)
+        #     pos, quat = pos_and_quat_from_matrix(transform)
+        #     objs[name] = RigidObjectCfg(
+        #         prim_path=f"{{ENV_REGEX_NS}}/{name}",
+        #         init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
+        #         spawn=usd_utils.CustomRigidUSDCfg(
+        #             usd_path=usd_path,
+        #             usd_sub_path=entry.GetPath().pathString,
+        #             rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
+        #             collision_props=CollisionPropertiesCfg(),
+        #             semantic_tags=[("class", "obj")],
+        #         )
+        #     )
         
-        for k, v in objs.items():
-            setattr(self, k, v)
+        # for k, v in objs.items():
+        #     setattr(self, k, v)
 
         
 
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[-1, :3]
+#     temp = pos.clone()
+#     pos[2] = temp[1]
+#     pos[1] = -temp[2]
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+#     return pos, quat
 def pos_and_quat_from_matrix(transform_mat):
-    pos = transform_mat[-1, :3]
-    temp = pos.clone()
-    pos[2] = temp[1]
-    pos[1] = -temp[2]
+    pos = transform_mat[:3, -1].clone()
     quat = math.quat_from_matrix(transform_mat[:3, :3])
     return pos, quat
-
 
 
 @configclass

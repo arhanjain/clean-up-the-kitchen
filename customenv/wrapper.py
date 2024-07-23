@@ -7,6 +7,7 @@ from .utils import misc_utils
 from gymnasium import Wrapper
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnv
+from PIL import Image
 
 class TestWrapper(Wrapper):
     def __init__(self, env: ManagerBasedRLEnv):
@@ -30,12 +31,19 @@ class TestWrapper(Wrapper):
         return joint_pos, joint_vel, joint_names
 
     def get_camera_data(self):
+        
         # RGB Image
         rgb = self.scene["camera"].data.output["rgb"]
 
+        
         # Mask 
         seg = self.scene["camera"].data.output["semantic_segmentation"]
         mask = torch.clamp(seg-1, max=1).cpu().numpy().astype(np.uint8) * 255
+        
+        # For debugging purposes
+        save_dir = "/home/jacob/projects/clean-up-the-kitchen/data"
+        Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
+        Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
 
         # Depth values per pixel
         depth = self.scene["camera"].data.output["distance_to_image_plane"]

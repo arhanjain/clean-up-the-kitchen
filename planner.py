@@ -105,7 +105,6 @@ class MotionPlanner:
 
         goal_pos = torch.tensor(goal[:, 0:3], device=self.device)
         goal_orientation = torch.tensor(goal[:, 3:7], device=self.device)
-
         #     joint_pos_des
         #compute curobo sol
         ik_goal = Pose(
@@ -115,7 +114,11 @@ class MotionPlanner:
         self.plan_config.pose_cost_metric = None
         # result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
         result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
-        if result.status ==MotionGenStatus.TRAJOPT_FAIL:
+        if result.status == MotionGenStatus.TRAJOPT_FAIL:
+            print('TRAJOPT_FAIL')
+            return None, False
+        if result.status == MotionGenStatus.IK_FAIL:
+            print("IK FAILURE")
             return None, False
         traj = result.get_paths()
         if mode == "joint_pos":
