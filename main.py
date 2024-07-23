@@ -86,22 +86,19 @@ def main():
 
             success = False
             for i in range(grasps.shape[0]):
-                # import pdb
-                # pdb.set_trace()
-                best_grasp = torch.tensor(grasps[i], dtype = torch.float32)
-                # best_grasp = [[-0.9347, -0.3248, -0.1441,  0.7071],
-                #         [-0.2930,  0.9339, -0.2047,  0.0223],
-                #         [ 0.2010, -0.1492, -0.9682,  0.2013],
-                #         [ 0.0000,  0.0000,  0.0000,  1.0000]]
-                # best_grasp = torch.tensor(best_grasp)
-                # This pos and quat method is acting weirdly, why is all pos all 0?
+                best_grasp = torch.tensor(grasps[i], dtype=torch.float32)
                 pos, quat = pos_and_quat_from_matrix(best_grasp)
                 goal = torch.cat([pos, quat], dim=0).unsqueeze(0).repeat(env.num_envs, 1).to(env.unwrapped.device)
                 plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
                 if success:
-                    # print(f"Grasp {i} succeeded with confidence {grasp_conf[sorted_indices[i]]}")
-                    # print(f"Grasp {i} succeeded with confidence {grasp_conf[i]}")
-                    break
+                    # Move back slightly before grasping
+                    pos_back = pos - torch.tensor([0, 0, 0.05]).to(pos.device)  # Adjust the distance as needed
+                    goal_back = torch.cat([pos_back, quat], dim=0).unsqueeze(0).repeat(env.num_envs, 1).to(env.unwrapped.device)
+                    plan_back, success_back = planner.plan(joint_pos, joint_vel, joint_names, goal_back, mode="ee_pose")
+                    if success_back:
+                        plan = plan_back + plan  # Append the plan to move back before grasping
+                        break
+
             if success:
                 with torch.inference_mode():
                     if not success:
@@ -110,14 +107,12 @@ def main():
                     plan = planner.pad_and_format(plan)
                     for pose in plan:
                         gripper = torch.ones(env.num_envs, 1).to(0)
-                        try:
-                            action = torch.cat((pose, gripper), dim=1)
-                        except:
-                            breakpoint()
-                            plan = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
-                        
-                        # breakpoint()
-                    # action = torch.tensor(env.action_space.sample()).to(env.device)
+                        action = torch.cat((pose, gripper), dim=1)
+                        env.step(action)
+                    # Close the gripper
+                    gripper_close = torch.zeros(env.num_envs, 1).to(0)
+                    for _ in range(10):  # Close the gripper
+                        action = torch.cat((pose, gripper_close), dim=1)
                         env.step(action)
         else:
             print("No successful grasp found")

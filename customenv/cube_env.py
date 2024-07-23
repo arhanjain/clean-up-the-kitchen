@@ -158,11 +158,22 @@ class CubeSceneCfg(InteractiveSceneCfg):
 #     pos[1] = -temp[2]
 #     quat = math.quat_from_matrix(transform_mat[:3, :3])
 #     return pos, quat
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[:3, -1].clone()
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+#     return pos, quat
+
 def pos_and_quat_from_matrix(transform_mat):
     pos = transform_mat[:3, -1].clone()
     quat = math.quat_from_matrix(transform_mat[:3, :3])
+    
+    # 180-degree rotation around the z-axis
+    quat_180_z = torch.tensor([0.0, 0.0, 1.0, 0.0])
+    
+    # Apply the 180-degree rotation
+    quat = math.quat_mul(quat, quat_180_z)
+    
     return pos, quat
-
 
 @configclass
 class CommandsCfg:
