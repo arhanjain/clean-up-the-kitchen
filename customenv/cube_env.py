@@ -1,12 +1,11 @@
 
-import pickle
+from dataclasses import MISSING
 import torch
 import numpy as np
-from PIL import Image
 import omni.isaac.lab.sim as sim_utils
 import omni.isaac.lab.utils.math as math
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
-from omni.isaac.lab.envs import ManagerBasedRLEnvCfg, ManagerBasedRLEnv
+from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
 from omni.isaac.lab.managers import EventTermCfg as EventTerm
 from omni.isaac.lab.managers import ObservationGroupCfg as ObsGroup
@@ -15,22 +14,21 @@ from omni.isaac.lab.managers import RewardTermCfg as RewTerm
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.managers import TerminationTermCfg as DoneTerm
 from omni.isaac.lab.sensors import CameraCfg
-from omni.isaac.lab.scene import InteractiveSceneCfg, InteractiveScene
+from omni.isaac.lab.scene import InteractiveSceneCfg
 from omni.isaac.lab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg, OffsetCfg
 from omni.isaac.lab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
 from omni.isaac.lab.utils import configclass
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
-from omni.isaac.lab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
+from omni.isaac.lab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, RigidBodyPropertiesCfg
 from omni.isaac.lab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
 from omni.isaac.lab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg
-# from omni.isaac.lab.envs.mdp import UniformPoseCommandCfg
 from . import mdp
 
-# from omni.isaac.lab_assets.franka import FRANKA_PANDA_CFG  # isort: skip
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
-from gymnasium import Wrapper
+from pxr import Usd, Sdf
+from .utils import usd_utils
 
 @configclass
 class CubeSceneCfg(InteractiveSceneCfg):
@@ -44,29 +42,10 @@ class CubeSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot"
     )
 
-    # robot.init_state.pos = (0.0, 0.0, 4.05)
-    # robot = None
-
-    # target object: will be populated by agent env cfg
-    # object: RigidObjectCfg = MISSING
-    # Set Cube as object
-    # person = UsdFileCfg(
-    #         usd_path=f"{ISAAC_NUCLEUS_DIR}/People/Characters/original_male_adult_police_04/male_adult_police_04.usd",
-    #         scale=(0.8, 0.8, 0.8),
-    #         rigid_props=RigidBodyPropertiesCfg(
-    #             solver_position_iteration_count=16,
-    #             solver_velocity_iteration_count=1,
-    #             max_angular_velocity=1000.0,
-    #             max_linear_velocity=1000.0,
-    #             max_depenetration_velocity=5.0,
-    #             disable_gravity=False,
-    #         ),
-    #         semantic_tags=[("class", "cube")]
-    # )
-
+    # whole scene cant be 1 rigid object
     object = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Object",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.055], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.05], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
             scale=(0.8, 0.8, 0.8),
@@ -82,35 +61,6 @@ class CubeSceneCfg(InteractiveSceneCfg):
         ),
     )
 
-    # test = AssetBaseCfg(
-    #     prim_path="{ENV_REGEX_NS}/Test",
-    #     spawn=UsdFileCfg(
-    #         usd_path="/home/arhan/Downloads/USDAssets/obj2sink_1.usd",
-    #     )
-    # )
-
-    # kitchen = RigidObjectCfg(
-    #     prim_path="{ENV_REGEX_NS}/Kitchen",
-    #     spawn=UsdFileCfg(
-    #         usd_path="/home/arhan/Downloads/kitchen.usdz",
-    #         collision_props=sim_utils.CollisionPropertiesCfg(),
-    #         rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
-    #         # scale=(0.1,0.1,0.1)
-    #     ),
-    #     init_state=RigidObjectCfg.InitialStateCfg(pos=[0, 0, 0], rot=[0.5,0.5, -0.5,-0.5])
-    # )
-
-
-
-    # Table
-    table = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Table",
-        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
-        spawn=UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
-            # semantic_tags=[("class", "table")]
-            ),
-    )
 
     # plane
     plane = AssetBaseCfg(
@@ -132,9 +82,8 @@ class CubeSceneCfg(InteractiveSceneCfg):
         width=640,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
-            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 2.0)
+            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
         ),
-        # offset=CameraCfg.OffsetCfg(pos=(0.510, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
         offset=CameraCfg.OffsetCfg(pos=(2.0, 0.0, 1.0), rot=(-0.612, -0.353, -0.353, -0.612), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
@@ -164,6 +113,45 @@ class CubeSceneCfg(InteractiveSceneCfg):
             ],
         )
 
+        # parse and add USD
+        objs = {}
+        usd_path = "/home/arhan/Downloads/scene/model.usda"
+        # usd_path = "/home/arhan/Downloads/scene/model.usda"
+        usd_stage = Usd.Stage.Open(usd_path)
+        
+        # rot = convert_orientation_convention(torch.tensor([1,0,0,0])[None], "world", "opengl").squeeze().tolist()
+        for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
+            name = entry.GetName()
+            transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+            transform = torch.tensor(transform)
+            pos, quat = pos_and_quat_from_matrix(transform)
+            objs[name] = RigidObjectCfg(
+                prim_path=f"{{ENV_REGEX_NS}}/{name}",
+                init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
+                spawn=usd_utils.CustomRigidUSDCfg(
+                    usd_path=usd_path,
+                    usd_sub_path=entry.GetPath().pathString,
+                    rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
+                    collision_props=CollisionPropertiesCfg(),
+                    semantic_tags=[("class", "obj")],
+                )
+            )
+        
+        for k, v in objs.items():
+            setattr(self, k, v)
+
+        
+
+def pos_and_quat_from_matrix(transform_mat):
+    pos = transform_mat[-1, :3]
+    temp = pos.clone()
+    pos[2] = temp[1]
+    pos[1] = -temp[2]
+    quat = math.quat_from_matrix(transform_mat[:3, :3])
+    return pos, quat
+
+
+
 @configclass
 class CommandsCfg:
     """Command terms for the MDP."""
@@ -174,7 +162,7 @@ class CommandsCfg:
         resampling_time_range=(5.0, 5.0),
         debug_vis=True,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.25, 0.5), roll=(0, 0), pitch=(0.0, 0.0), yaw=(0.0, 0.0)
+            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.15, 0.15), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
         ),
     )
 
@@ -184,19 +172,14 @@ class ActionsCfg:
     """Action specifications for the MDP."""
 
     # will be set by agent env cfg
-    body_joint_pos: mdp.JointPositionActionCfg = DifferentialInverseKinematicsActionCfg(
+    body_joint_pos: mdp.DifferentialInverseKinematicsActionCfg = DifferentialInverseKinematicsActionCfg(
         asset_name="robot",
         joint_names=["panda_joint.*"],
         body_name="panda_hand",
         controller=DifferentialIKControllerCfg(command_type="pose", use_relative_mode=False, ik_method="dls"),
         body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=[0.0, 0.0, 0.0]),
     )
-    # body_joint_pos = mdp.JointPositionActionCfg(
-    #     asset_name="robot",
-    #     joint_names=["panda_joint.*"],
-    #     scale=1.0,
-    #     use_default_offset=True,
-    # )
+
     finger_joint_pos: mdp.BinaryJointPositionActionCfg = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
         joint_names=["panda_finger.*"],
@@ -213,15 +196,20 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        # joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        # joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         object_position = ObsTerm(func=mdp.object_position_in_robot_root_frame)
-        target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
-        actions = ObsTerm(func=mdp.last_action)
+        # target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
+        # actions = ObsTerm(func=mdp.last_action)
+        # rgb, seg, depth = ObsTerm(func=mdp.get_camera_data)
+        # rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
+        # seg = ObsTerm(func=mdp.get_camera_data, params={"type": "semantic_segmentation"})
+        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
+
 
         def __post_init__(self):
             self.enable_corruption = True
-            self.concatenate_terms = True
+            self.concatenate_terms = False
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -330,86 +318,3 @@ class CubeEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
 
-
-class TestWrapper(Wrapper):
-    def __init__(self, env: ManagerBasedRLEnv):
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv):
-            raise ValueError("Environment must be a ManagerBasedRLEnv...")
-
-        # self.env = env 
-        # self.scene = env.scene
-        super().__init__(env)
-    
-    def get_joint_info(self):
-        # Specify robot-specific parameters
-        robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
-        robot_entity_cfg.resolve(self.scene)
-
-        joint_pos = self.scene["robot"].data.joint_pos[:, robot_entity_cfg.joint_ids]
-        joint_vel = self.scene["robot"].data.joint_vel[:, robot_entity_cfg.joint_ids]
-        joint_names = self.scene["robot"].data.joint_names
-
-        return joint_pos, joint_vel, joint_names
-
-    def get_camera_data(self):
-        rgb = self.scene["camera"].data.output["rgb"]
-        seg = self.scene["camera"].data.output["semantic_segmentation"]
-        depth = self.scene["camera"].data.output["distance_to_image_plane"]
-        depth = np.clip(depth.cpu().numpy(), None, 1e5)
-
-        save_dir = "/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/data/"
-        # save rgb
-        Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
-        # save depth
-        np.save(f"{save_dir}/depth.npy", depth[0])
-        # save seg
-        mask = torch.clamp(seg-1, max = 1).cpu().numpy().astype(np.uint8) * 255
-        Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
-
-        # metadata
-        metadata = {}
-        intrinsics = self.scene["camera"].data.intrinsic_matrices[0]
-
-        # camera pose
-        cam_pos = self.scene["camera"].data.pos_w
-        cam_quat = self.scene["camera"].data.quat_w_ros
-
-        robot_pos = self.scene["robot"].data.root_state_w[:, :3]
-        robot_quat = self.scene["robot"].data.root_state_w[:, 3:7]
-
-        cam_pos_r, cam_quat_r = math.subtract_frame_transforms(
-            robot_pos, robot_quat,
-            cam_pos, cam_quat
-        )
-        cam_rot_mat_r = math.matrix_from_quat(cam_quat_r)
-        cam_pos_r = cam_pos_r.unsqueeze(2)
-
-        transformation = torch.cat((cam_rot_mat_r, cam_pos_r), dim=2).cpu()
-
-        bottom_row = torch.tensor([0,0,0,1]).expand(self.num_envs, 1, 4)
-        transformation = torch.cat((transformation, bottom_row), dim=1).numpy()
-
-
-        # filler from existing file
-        ee_pose = np.array([[ 0.02123945,  0.82657526,  0.56242531,  0.18838109],
-        [ 0.99974109, -0.02215279, -0.00519713, -0.01743025],
-        [ 0.00816347,  0.56239007, -0.82683176,  0.6148137 ],
-        [ 0.        ,  0.        ,  0.        ,  1.        ]])
-        scene_bounds = np.array([-0.4, -0.8, -0.2, 1.2, 0.8, 0.6])
-
-        metadata["intrinsics"] = intrinsics.cpu().numpy()
-        metadata["camera_pose"] = transformation[0]
-        metadata["ee_pose"] = ee_pose
-        metadata["label_map"] = None
-        # metadata["scene_bounds"] = scene_bounds
-
-        with open(f"{save_dir}/meta_data.pkl", "wb") as f:
-            pickle.dump(metadata, f)
-
-        return rgb, seg, depth
-
-
-    def goal_pose(self):
-        return mdp.generated_commands(self.env, "object_pose")
-    # def object_pos(self):
-    #     return self.env.
