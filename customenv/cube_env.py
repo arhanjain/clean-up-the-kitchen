@@ -26,6 +26,7 @@ from . import mdp
 
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
+from scipy.spatial.transform import Rotation as R
 
 from pxr import Usd, Sdf
 from .utils import usd_utils
@@ -163,17 +164,45 @@ class CubeSceneCfg(InteractiveSceneCfg):
 #     quat = math.quat_from_matrix(transform_mat[:3, :3])
 #     return pos, quat
 
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[:3, -1].clone()
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+    
+#     # 180-degree rotation around the z-axis
+#     quat_180_z = torch.tensor([0.0, 0.0, 1.0, 0.0])
+    
+#     # Apply the 180-degree rotation
+#     quat = math.quat_mul(quat, quat_180_z)
+    
+#     return pos, quat
+
+
 def pos_and_quat_from_matrix(transform_mat):
     pos = transform_mat[:3, -1].clone()
-    quat = math.quat_from_matrix(transform_mat[:3, :3])
-    
-    # 180-degree rotation around the z-axis
-    quat_180_z = torch.tensor([0.0, 0.0, 1.0, 0.0])
-    
-    # Apply the 180-degree rotation
-    quat = math.quat_mul(quat, quat_180_z)
-    
-    return pos, quat
+
+    # Extract rotation matrix from the transformation matrix and convert to quaternion
+    rotation_matrix = transform_mat[:3, :3]
+    quat = R.from_matrix(rotation_matrix).as_quat()
+
+    # Convert the quaternion to a torch tensor and reshape to [1, 4]
+    quat_tensor = torch.tensor(quat).reshape(1, 4)
+
+    # Convert quaternion to Euler angles
+    euler_angles = math.euler_xyz_from_quat(quat_tensor)
+
+    # Unpack the tuple
+    roll, pitch, yaw = euler_angles
+
+    # Adjust the yaw angle
+    if yaw > np.pi / 2:
+        yaw -= np.pi
+    if yaw < -np.pi / 2:
+        yaw += np.pi
+
+    # Convert the adjusted Euler angles back to quaternion
+    adjusted_quat = R.from_euler('xyz', [roll.item(), pitch.item(), yaw.item()], degrees=False).as_quat()
+    adjusted_quat = torch.tensor(adjusted_quat, dtype = torch.float32)
+    return pos, adjusted_quat
 
 @configclass
 class CommandsCfg:

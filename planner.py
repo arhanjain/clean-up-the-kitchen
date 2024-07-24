@@ -103,8 +103,8 @@ class MotionPlanner:
         )
         cu_js = cu_js.get_ordered_joint_state(self.motion_gen.kinematics.joint_names)
 
-        goal_pos = torch.tensor(goal[:, 0:3], device=self.device)
-        goal_orientation = torch.tensor(goal[:, 3:7], device=self.device)
+        goal_pos = goal[:, 0:3].clone().detach().to(self.device)
+        goal_orientation = goal[:, 3:7].clone().detach().to(self.device)
         #     joint_pos_des
         #compute curobo sol
         ik_goal = Pose(

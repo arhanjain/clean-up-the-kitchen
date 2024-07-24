@@ -47,37 +47,39 @@ from customenv.cube_env import pos_and_quat_from_matrix
 
 
 def main():
-    # create environment configuration
+    # Create environment configuration
     env_cfg = parse_env_cfg(
         args_cli.task, use_gpu=not args_cli.cpu, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
     )
-    # create environment
+    # Create environment
     env = gym.make(args_cli.task, cfg=env_cfg)
     env = TestWrapper(env)
 
-    # print info (this is vectorized environment)
+    # Print info (this is vectorized environment)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
-    # reset environment
+    # Reset environment
     obs, info = env.reset()
     planner = MotionPlanner(env)
-    # Temp fix to image rendering, so that it captures rgb correctly before entering.
+    # Temp fix to image rendering, so that it captures RGB correctly before entering.
     for _ in range(10):
         action = torch.tensor(env.action_space.sample()).to(env.device)
         env.step(action)
-    # simulate environment
+    # Simulate environment
     print("begin!")
     while simulation_app.is_running():
-        # run everything in inference mode
+        # Run everything in inference mode
         joint_pos, joint_vel, joint_names = env.get_joint_info()
         rgb, seg, depth, meta_data = env.get_camera_data()
-        # Not always consistent, hit or miss, currently using 25 inference passes from M2T2 config
+
+        # Load and predict grasp points
         cfg = OmegaConf.load("/home/jacob/projects/clean-up-the-kitchen/M2T2/config.yaml")
         data, outputs = load_and_predict(cfg, meta_data, rgb, depth, seg)
         # Visualize through meshcat-viewer
         visualize(cfg, data, outputs)
-        # Currently only support for grasping one type of object in one environment
-        # So if there are four objects with different num grasps, it will not work.
+
+        # Check if there are any grasps
+        pos = quat = None
         if len(outputs['grasps']) > 0:
             grasps = np.array(outputs['grasps'][0])  # Just the first object
             grasp_conf = np.array(outputs['grasp_confidence'][0])
@@ -88,36 +90,32 @@ def main():
             for i in range(grasps.shape[0]):
                 best_grasp = torch.tensor(grasps[i], dtype=torch.float32)
                 pos, quat = pos_and_quat_from_matrix(best_grasp)
+
+                # Move directly to the grasp position
                 goal = torch.cat([pos, quat], dim=0).unsqueeze(0).repeat(env.num_envs, 1).to(env.unwrapped.device)
                 plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
                 if success:
-                    # Move back slightly before grasping
-                    pos_back = pos - torch.tensor([0, 0, 0.05]).to(pos.device)  # Adjust the distance as needed
-                    goal_back = torch.cat([pos_back, quat], dim=0).unsqueeze(0).repeat(env.num_envs, 1).to(env.unwrapped.device)
-                    plan_back, success_back = planner.plan(joint_pos, joint_vel, joint_names, goal_back, mode="ee_pose")
-                    if success_back:
-                        plan = plan_back + plan  # Append the plan to move back before grasping
-                        break
+                    break
 
             if success:
                 with torch.inference_mode():
-                    if not success:
-                        env.reset()
-                        continue
                     plan = planner.pad_and_format(plan)
                     for pose in plan:
                         gripper = torch.ones(env.num_envs, 1).to(0)
                         action = torch.cat((pose, gripper), dim=1)
                         env.step(action)
-                    # Close the gripper
-                    gripper_close = torch.zeros(env.num_envs, 1).to(0)
-                    for _ in range(10):  # Close the gripper
-                        action = torch.cat((pose, gripper_close), dim=1)
-                        env.step(action)
+                        final_pose = plan[-1]
+                        print('final pose', final_pose)
+                        for _ in range(10):
+                            gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
+                            action = torch.cat((final_pose.clone(), gripper_close), dim=1)
+                            env.step(action)
         else:
             print("No successful grasp found")
-        #env.reset()
-    # close the simulator
+
+        env.reset()
+        
+    # Close the simulator
     env.close()
 
 
