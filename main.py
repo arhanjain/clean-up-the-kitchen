@@ -21,29 +21,11 @@ simulation_app = app_launcher.app
 import torch
 import numpy as np
 import gymnasium as gym
-import omni.isaac.lab.sim as sim_utils
-
-from grasp_utils import load_and_predict, visualize
-# from test import load_and_predict
-import omni.isaac.lab_tasks
+from grasp_utils import load_and_predict, visualize, pos_and_quat_from_matrix
 from omni.isaac.lab_tasks.utils import parse_env_cfg
-from omni.isaac.lab.assets.asset_base_cfg import AssetBaseCfg
-from omni.isaac.lab.assets import RigidObjectCfg
-from omni.isaac.lab.scene import InteractiveSceneCfg, InteractiveScene
-from omni.isaac.lab.utils import configclass
-from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
-from omni.isaac.lab.controllers import DifferentialIKController, DifferentialIKControllerCfg
-from omni.isaac.lab.managers import SceneEntityCfg
-from omni.isaac.lab.markers import VisualizationMarkers
-from omni.isaac.lab.markers.config import FRAME_MARKER_CFG
-from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
-from omni.isaac.lab.utils.math import subtract_frame_transforms, quat_from_matrix
-from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
-
 from planner import MotionPlanner
 from customenv import TestWrapper
 from omegaconf import OmegaConf
-from customenv.cube_env import pos_and_quat_from_matrix
 
 
 def main():
@@ -71,11 +53,10 @@ def main():
         # Run everything in inference mode
         joint_pos, joint_vel, joint_names = env.get_joint_info()
         rgb, seg, depth, meta_data = env.get_camera_data()
-
         # Load and predict grasp points
         cfg = OmegaConf.load("/home/jacob/projects/clean-up-the-kitchen/M2T2/config.yaml")
         data, outputs = load_and_predict(cfg, meta_data, rgb, depth, seg)
-        # Visualize through meshcat-viewer
+        # Visualize through meshcat-viewer, how can we visualize the batches seperatly.  
         visualize(cfg, data, outputs)
 
         # Check if there are any grasps
@@ -113,7 +94,7 @@ def main():
         else:
             print("No successful grasp found")
 
-        env.reset()
+        env.reset() # To avoid inference mode resetting, comment this out.
         
     # Close the simulator
     env.close()

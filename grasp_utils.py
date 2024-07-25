@@ -7,24 +7,23 @@ import os
 import pickle
 import torch
 
-from M2T2.m2t2.dataset_utils import sample_points, depth_to_xyz, normalize_rgb
+from M2T2.m2t2.dataset_utils import sample_points, denormalize_rgb, sample_points, jitter_gaussian
 from M2T2.m2t2.dataset import collate
 from M2T2.m2t2.m2t2 import M2T2
 from M2T2.m2t2.plot_utils import get_set_colors
 from M2T2.m2t2.train_utils import to_cpu, to_gpu
-from M2T2.m2t2.dataset_utils import denormalize_rgb, sample_points, jitter_gaussian
 from M2T2.m2t2.meshcat_utils import (
     create_visualizer, make_frame, visualize_grasp, visualize_pointcloud
 )
-
-
+import omni.isaac.lab.utils.math as math
+from torchvision import transforms
 def load_and_predict(cfg, meta_data, rgb, depth, seg):
-    data =  load_rgb_xyz(
+    # We only want the outputs, not meta_data
+    data = load_rgb_xyz(
         meta_data, rgb, depth, seg, cfg.data.robot_prob,
         cfg.data.world_coord, cfg.data.jitter_scale,
         cfg.data.grid_resolution, cfg.eval.surface_range
     )[0]
-    # data returns a tuple for each env
 
     # import pdb
     # pdb.set_trace()
@@ -69,13 +68,10 @@ def load_and_predict(cfg, meta_data, rgb, depth, seg):
 def load_rgb_xyz(
     meta_data, rgb, depth, seg, robot_prob, world_coord, jitter_scale, grid_res, surface_range=0
 ):
-    depth = depth[0].cpu()
-    normalized_rgb = normalize_rgb(rgb[0][:, :, :3].float().cpu().numpy() / 255.0)
-    xyz = torch.from_numpy(
-        depth_to_xyz(depth.cpu().numpy(), meta_data['intrinsics'])
-    ).float()
-    seg = torch.from_numpy(seg)
-    normalized_rgb = normalized_rgb.permute(1, 2, 0)
+    normalized_rgb = normalize_rgb_batches(rgb / 255.0)
+    xyz = depth_to_xyz(depth, meta_data['intrinsics']).float()
+    seg = torch.from_numpy(seg).to(depth.device)
+    normalized_rgb = normalized_rgb.permute(0, 2, 3, 1)
     label_map = meta_data['label_map']
 
     if torch.rand(()) > robot_prob:
@@ -86,8 +82,8 @@ def load_rgb_xyz(
             robot_mask |= seg == label_map[meta_data['object_label']]
         depth[robot_mask] = 0
         seg[robot_mask] = 0
-    xyz, normalized_rgb, seg = xyz[depth > 0], normalized_rgb[depth > 0], seg[0][depth > 0]
-    cam_pose = torch.from_numpy(meta_data['camera_pose']).float()
+    xyz, normalized_rgb, seg = xyz[depth > 0], normalized_rgb[depth > 0], seg[depth > 0]
+    cam_pose = torch.from_numpy(meta_data['camera_pose']).float().to(xyz.device)
     xyz_world = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
 
     if 'scene_bounds' in meta_data:
@@ -146,45 +142,15 @@ def load_rgb_xyz(
             'object_center': torch.zeros(3)
         })
     return outputs, meta_data
-# def load_rgb_xyz(meta_data, rgb, depth, seg):
-#     depth = depth[0]
-#     normalized_rgb = normalize_rgb(rgb[0][:, :, :3].float().cpu().numpy() / 255.0)
-#     xyz = torch.from_numpy(
-#         depth_to_xyz(depth, meta_data['intrinsics'])
-#     ).float()
-#     seg = torch.from_numpy(np.array(seg.cpu()))
-#     normalized_rgb = normalized_rgb.permute(1, 2, 0)
-#     # Filter out points where depth is zero
-#     # Turns it into #307200, 3
-#     xyz, normalized_rgb, seg = xyz[depth > 0], normalized_rgb[depth > 0], seg[0][depth > 0]
-
-#     outputs = {
-#         'inputs': torch.cat([xyz - xyz.mean(dim=0), normalized_rgb], dim=1),
-#         'points': xyz,
-#         'seg': seg,
-#     }
-
-#     if 'camera_pose' in meta_data:
-#         cam_pose = torch.from_numpy(meta_data['camera_pose']).float()
-#         outputs['cam_pose'] = cam_pose
-
-#     outputs.update({
-#         'object_inputs': torch.rand(1024, 6),
-#         'ee_pose': torch.eye(4),
-#         'bottom_center': torch.zeros(3),
-#         'object_center': torch.zeros(3)
-#     })
-
-#     return outputs, meta_data
 
 def visualize(cfg, data, outputs):
     vis = create_visualizer()
     rgb = denormalize_rgb(
         data['inputs'][:, 3:].T.unsqueeze(2)
     ).squeeze(2).T
-    rgb = (rgb.numpy() * 255).astype('uint8')
-    xyz = data['points'].numpy()
-    cam_pose = data['cam_pose'].double().numpy()
+    rgb = (rgb.cpu().numpy() * 255).astype('uint8')
+    xyz = data['points'].cpu().numpy()
+    cam_pose = data['cam_pose'].cpu().double().numpy()
     make_frame(vis, 'camera', T=cam_pose)
     if not cfg.eval.world_coord:
         xyz = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
@@ -215,103 +181,52 @@ def visualize(cfg, data, outputs):
                     vis, f"object_{i:02d}/grasps/{j:03d}",
                     grasp, color, linewidth=0.2
                 )
-    # elif data['task'] == 'place':
-    #     ee_pose = data['ee_pose'].double().numpy()
-    #     make_frame(vis, 'ee', T=ee_pose)
-    #     obj_xyz_ee, obj_rgb = data['object_inputs'].split([3, 3], dim=1)
-    #     obj_xyz_ee = (obj_xyz_ee + data['object_center']).numpy()
-    #     obj_xyz = obj_xyz_ee @ ee_pose[:3, :3].T + ee_pose[:3, 3]
-    #     obj_rgb = denormalize_rgb(obj_rgb.T.unsqueeze(2)).squeeze(2).T
-    #     obj_rgb = (obj_rgb.numpy() * 255).astype('uint8')
-    #     visualize_pointcloud(vis, 'object', obj_xyz, obj_rgb, size=0.005)
-    #     for i, (placements, conf, contacts) in enumerate(zip(
-    #         outputs['placements'],
-    #         outputs['placement_confidence'],
-    #         outputs['placement_contacts'],
-    #     )):
-    #         print(f"orientation_{i:02d} has {placements.shape[0]} placements")
-    #         conf = conf.numpy()
-    #         conf_colors = (np.stack([
-    #             1 - conf, conf, np.zeros_like(conf)
-    #         ], axis=1) * 255).astype('uint8')
-    #         visualize_pointcloud(
-    #             vis, f"orientation_{i:02d}/contacts",
-    #             contacts.numpy(), conf_colors, size=0.01
-    #         )
-    #         placements = placements.numpy()
-    #         if not cfg.eval.world_coord:
-    #             placements = cam_pose @ placements
-    #         visited = np.zeros((0, 3))
-    #         for j, k in enumerate(np.random.permutation(placements.shape[0])):
-    #             if visited.shape[0] > 0:
-    #                 dist = np.sqrt((
-    #                     (placements[k, :3, 3] - visited) ** 2
-    #                 ).sum(axis=1))
-    #                 if dist.min() < cfg.eval.placement_vis_radius:
-    #                     continue
-    #             visited = np.concatenate([visited, placements[k:k+1, :3, 3]])
-    #             visualize_grasp(
-    #                 vis, f"orientation_{i:02d}/placements/{j:02d}/gripper",
-    #                 placements[k], [0, 255, 0], linewidth=0.2
-    #             )
-    #             obj_xyz_placed = obj_xyz_ee @ placements[k, :3, :3].T \
-    #                            + placements[k, :3, 3]
-    #             visualize_pointcloud(
-    #                 vis, f"orientation_{i:02d}/placements/{j:02d}/object",
-    #                 obj_xyz_placed, obj_rgb, size=0.01
-    #             )
-
-# def get_grasping_points(cfg, meta_data, rgb, depth, seg):
-#     print('depth', depth)
-#     data, outputs = load_and_predict(cfg, meta_data, rgb, depth, seg)
-#     # vis = create_visualizer()
-#     # rgb = denormalize_rgb(
-#     #     data['inputs'][:, 3:].T.unsqueeze(2)
-#     # ).squeeze(2).T
-#     # rgb = (rgb.numpy()).astype('uint8')
-#     # xyz = data['points'].numpy()
-#     # cam_pose = data['cam_pose'].double().numpy()
-#     # make_frame(vis, 'camera', T=cam_pose)
-#     # if not cfg.eval.world_coord:
-#     #     xyz = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
-#     # visualize_pointcloud(vis, 'scene', xyz, rgb, size=0.005)
-#     # if data['task'] == 'pick':
-#     #     for i, (grasps, conf, contacts, color) in enumerate(zip(
-#     #         outputs['grasps'],
-#     #         outputs['grasp_confidence'],
-#     #         outputs['grasp_contacts'],
-#     #         get_set_colors()
-#     #     )):
-#     #         print(f"object_{i:02d} has {grasps.shape[0]} grasps")
-#     #         conf = conf.numpy()
-#     #         conf_colors = (np.stack([
-#     #             1 - conf, conf, np.zeros_like(conf)
-#     #         ], axis=1) * 255).astype('uint8')
-#     #         visualize_pointcloud(
-#     #             vis, f"object_{i:02d}/contacts",
-#     #             contacts.numpy(), conf_colors, size=0.01
-#     #         )
-#     #         grasps = grasps.cpu().numpy()
-#     #         if not cfg.eval.world_coord:
-#     #             grasps = cam_pose @ grasps
-            
-#     #         for j, grasp in enumerate(grasps):
-#     #             visualize_grasp(
-#     #                 vis, f"object_{i:02d}/grasps/{j:03d}",
-#     #                 grasp, color, linewidth=0.2
-#     #             )
-#     if data['task'] == 'pick':
-#         for i, (grasps, conf) in enumerate(zip(
-#             outputs['grasps'],
-#             outputs['grasp_confidence']
-#         )):
-#             print(f"object_{i:02d} has {grasps.shape[0]} grasps")
-#             grasps = torch.tensor(grasps, dtype = torch.float32)
-#             conf = torch.tensor(conf)
-#             conf_highest_index = torch.argmax(conf)
-#             best_grasp = grasps[conf_highest_index]
-#     return grasps
 
 
+def pos_and_quat_from_matrix(transform_mat):
+    pos = transform_mat[:3, -1].clone()
+    rotation_matrix = transform_mat[:3, :3]
+    quat = math.quat_from_matrix(rotation_matrix)
 
-    
+    quat_tensor = quat.clone().reshape(1, 4)
+    roll, pitch, yaw = math.euler_xyz_from_quat(quat_tensor) # Takes in (N, 4)
+
+    if yaw > np.pi / 2:
+        yaw -= np.pi
+    if yaw < -np.pi / 2:
+        yaw += np.pi
+
+    adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw)
+    return pos, adjusted_quat[0] # Make it back into (4,)
+
+def normalize_rgb_batches(rgb):
+    rgb = rgb[:, :, :, :3]  
+    rgb = rgb.permute(0, 3, 1, 2)  # Shape will be (batch_size, 3, height, width)
+    normalize_rgb = transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]
+    )
+    normalized_rgb = normalize_rgb(rgb)
+    return normalized_rgb
+
+def depth_to_xyz(depth, intrinsics):
+    if isinstance(intrinsics, np.ndarray):
+        intrinsics = torch.from_numpy(intrinsics).float().to(depth.device)
+
+    batch_size, height, width = depth.shape
+
+    # Expand intrinsics to match the batch size
+    intrinsics = intrinsics.unsqueeze(0).expand(batch_size, -1, -1)
+
+    fx, fy = intrinsics[:, 0, 0], intrinsics[:, 1, 1]
+    cx, cy = intrinsics[:, 0, 2], intrinsics[:, 1, 2]
+
+    u = torch.arange(width, device=depth.device).view(1, 1, -1).expand(batch_size, height, -1)
+    v = torch.arange(height, device=depth.device).view(1, -1, 1).expand(batch_size, -1, width)
+
+    Z = depth
+    X = (u - cx.view(-1, 1, 1)) * (Z / fx.view(-1, 1, 1))
+    Y = (v - cy.view(-1, 1, 1)) * (Z / fy.view(-1, 1, 1))
+
+    xyz = torch.stack((X, Y, Z), dim=-1)
+    return xyz
