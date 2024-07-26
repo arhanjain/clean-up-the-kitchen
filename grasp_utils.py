@@ -27,11 +27,7 @@ def load_rgb_xyz(
         depth_to_xyz(depth, meta_data['intrinsics'])
     ).float()
     seg = torch.from_numpy(np.array(seg))
-    # with open(f'{data_dir}/meta_data.pkl', 'rb') as f:
-    #     meta_data = pickle.load(f)
-    # rgb = normalize_rgb(Image.open(f'{data_dir}/rgb.png')).permute(1, 2, 0)
-    # depth = np.load(f'{data_dir}/depth.npy')
-    # seg = torch.from_numpy(np.array(Image.open(f'{data_dir}/seg.png')))
+
     label_map = meta_data['label_map']
 
     if torch.rand(()) > robot_prob:
@@ -185,10 +181,6 @@ def m2t2_grasp_to_pos_and_quat(transform_mat):
     # Adjust the yaw angle
     yaw = torch.where(yaw > np.pi/2, yaw - np.pi, yaw)
     yaw = torch.where(yaw > np.pi/2, yaw + np.pi, yaw)
-    # if yaw > np.pi / 2:
-    #     yaw -= np.pi
-    # if yaw < -np.pi / 2:
-    #     yaw += np.pi
 
     # Convert the adjusted Euler angles back to quaternion
     adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).squeeze()

@@ -91,11 +91,6 @@ class TestWrapper(Wrapper):
         with open(f"{save_dir}/meta_data.pkl", "wb") as f:
             pickle.dump(metadata, f)
 
-        # Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
-        # Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
-        # np.save(f"{save_dir}/depth.npy", depth.cpu().numpy()[0])
-
-        # return rgb[0][None], mask[0][None], depth[0][None], metadata
         return rgb, mask, depth, metadata
 
 

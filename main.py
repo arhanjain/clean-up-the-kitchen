@@ -78,10 +78,8 @@ def main():
         )
         marker = VisualizationMarkers(marker_cfg)
 
-        # Check if there are any grasps
-        # if len(outputs['grasps']) > 0:
+        # Check if the first env has grasps, hopefully they have grasps TODO improve
         if len(outputs["grasps"][0]) > 0:
-
             backup = None
             best_grasps = []
             for i in range(env.num_envs):
@@ -97,6 +95,8 @@ def main():
                     best_grasps.append(grasps[0])
                     if i == 0:
                         backup = grasps[0]
+
+            # Get motion plan to grasp pose
             best_grasps = torch.tensor(best_grasps)
             pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
             goal = torch.cat([pos, quat], dim=1)
@@ -105,6 +105,8 @@ def main():
             if success:
                 with torch.inference_mode():
                     plan = planner.pad_and_format(plan)
+                    
+                    # go to grasp pose
                     for pose in plan:
                         gripper = torch.ones(env.num_envs, 1).to(0)
                         action = torch.cat((pose, gripper), dim=1)
@@ -112,11 +114,14 @@ def main():
                         final_pose = plan[-1]
 
                         # marker.visualize(final_pose[:, :3], final_pose[:, 3:])
+                    
+                    # close gripper
                     for _ in range(10):
                         gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
                         action = torch.cat((final_pose.clone(), gripper_close), dim=1)
                         env.step(action)
                     
+                    # move gripper to demonstrate "pick"
                     for _ in range(50):
                         gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
                         newpose = torch.cat((final_pose[:, :3] + 0.2*torch.ones(env.num_envs,3).to(0), final_pose[:, 3:]), dim=1)
