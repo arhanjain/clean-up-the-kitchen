@@ -42,10 +42,10 @@ class CubeSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot"
     )
 
-    # whole scene cant be 1 rigid object
+    # # whole scene cant be 1 rigid object
     object = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/Object",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.05], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.05], rot=[0.92, 0, 0, 0.38]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
             scale=(0.8, 0.8, 0.8),
@@ -61,6 +61,26 @@ class CubeSceneCfg(InteractiveSceneCfg):
         ),
     )
 
+    avacado = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/hehe",
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0.05, 0.05], rot=[1, 0, 0, 0]),
+        spawn=UsdFileCfg(
+            usd_path=f"omniverse://localhost/NVIDIA/Assets/ArchVis/Residential/Food/Fruit/Avocado01.usd",
+            scale=(0.01, 0.01, 0.01),
+            rigid_props=RigidBodyPropertiesCfg(),
+            semantic_tags=[("class", "circle")]
+        ),
+    )
+
+    # Table
+    table = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/Table",
+        init_state=AssetBaseCfg.InitialStateCfg(pos=[0.5, 0, 0], rot=[0.707, 0, 0, 0.707]),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
+            # semantic_tags=[("class", "table")]
+            ),
+    )
 
     # plane
     plane = AssetBaseCfg(
@@ -100,7 +120,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
-            debug_vis=False,
+            debug_vis=True,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
@@ -113,42 +133,58 @@ class CubeSceneCfg(InteractiveSceneCfg):
             ],
         )
 
-        # parse and add USD
-        objs = {}
-        usd_path = "/home/arhan/Downloads/scene/model.usda"
-        # usd_path = "/home/arhan/Downloads/scene/model.usda"
-        usd_stage = Usd.Stage.Open(usd_path)
+        # # parse and add USD
+        # objs = {}
+        # usd_path = "/home/jacob/Downloads/test/model.usda"
+        # # usd_path = "/home/arhan/Downloads/scene/model.usda"
+        # usd_stage = Usd.Stage.Open(usd_path)
         
-        # rot = convert_orientation_convention(torch.tensor([1,0,0,0])[None], "world", "opengl").squeeze().tolist()
-        for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
-            name = entry.GetName()
-            transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-            transform = torch.tensor(transform)
-            pos, quat = pos_and_quat_from_matrix(transform)
-            objs[name] = RigidObjectCfg(
-                prim_path=f"{{ENV_REGEX_NS}}/{name}",
-                init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-                spawn=usd_utils.CustomRigidUSDCfg(
-                    usd_path=usd_path,
-                    usd_sub_path=entry.GetPath().pathString,
-                    rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
-                    collision_props=CollisionPropertiesCfg(),
-                    semantic_tags=[("class", "obj")],
-                )
-            )
+        # # rot = convert_orientation_convention(torch.tensor([1,0,0,0])[None], "world", "opengl").squeeze().tolist()
+        # for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
+        #     name = entry.GetName()
+        #     transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+        #     transform = torch.tensor(transform)
+        #     pos, quat = pos_and_quat_from_matrix(transform)
+        #     objs[name] = RigidObjectCfg(
+        #         prim_path=f"{{ENV_REGEX_NS}}/{name}",
+        #         init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
+        #         spawn=usd_utils.CustomRigidUSDCfg(
+        #             usd_path=usd_path,
+        #             usd_sub_path=entry.GetPath().pathString,
+        #             rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True),
+        #             collision_props=CollisionPropertiesCfg(),
+        #             semantic_tags=[("class", "obj")],
+        #         )
+        #     )
         
-        for k, v in objs.items():
-            setattr(self, k, v)
+        # for k, v in objs.items():
+        #     setattr(self, k, v)
 
         
 
-def pos_and_quat_from_matrix(transform_mat):
-    pos = transform_mat[-1, :3]
-    temp = pos.clone()
-    pos[2] = temp[1]
-    pos[1] = -temp[2]
-    quat = math.quat_from_matrix(transform_mat[:3, :3])
-    return pos, quat
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[-1, :3]
+#     temp = pos.clone()
+#     pos[2] = temp[1]
+#     pos[1] = -temp[2]
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+#     return pos, quat
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[:3, -1].clone()
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+#     return pos, quat
+
+# def pos_and_quat_from_matrix(transform_mat):
+#     pos = transform_mat[:3, -1].clone()
+#     quat = math.quat_from_matrix(transform_mat[:3, :3])
+    
+#     # 180-degree rotation around the z-axis
+#     quat_180_z = torch.tensor([0.0, 0.0, 1.0, 0.0])
+    
+#     # Apply the 180-degree rotation
+#     quat = math.quat_mul(quat, quat_180_z)
+    
+#     return pos, quat
 
 
 
@@ -160,7 +196,7 @@ class CommandsCfg:
         asset_name="robot",
         body_name="panda_hand",  # will be set by agent env cfg
         resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
             pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.15, 0.15), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
         ),

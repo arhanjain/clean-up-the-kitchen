@@ -1,4 +1,5 @@
 import torch
+import pickle
 import numpy as np
 import omni.isaac.lab.utils.math as math
 
@@ -7,6 +8,7 @@ from .utils import misc_utils
 from gymnasium import Wrapper
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnv
+from PIL import Image
 
 class TestWrapper(Wrapper):
     def __init__(self, env: ManagerBasedRLEnv):
@@ -30,13 +32,15 @@ class TestWrapper(Wrapper):
         return joint_pos, joint_vel, joint_names
 
     def get_camera_data(self):
+        
         # RGB Image
         rgb = self.scene["camera"].data.output["rgb"]
 
+        
         # Mask 
         seg = self.scene["camera"].data.output["semantic_segmentation"]
         mask = torch.clamp(seg-1, max=1).cpu().numpy().astype(np.uint8) * 255
-
+        
         # Depth values per pixel
         depth = self.scene["camera"].data.output["distance_to_image_plane"]
 
@@ -68,6 +72,24 @@ class TestWrapper(Wrapper):
         metadata["camera_pose"] = transformation[0]
         metadata["ee_pose"] = ee_pose
         metadata["label_map"] = None
+
+        # For debugging purposes
+        save_dir = "/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/data"
+
+
+        # everything should be numpy
+        # Remove 4th channel for rgb
+        # Make num_envs verisonos of metadaTA
+        rgb = rgb[..., :-1].cpu().numpy()
+        mask = mask
+        depth = depth.cpu().numpy()
+        metadata = [metadata for _ in range(rgb.shape[0])]
+
+        np.save(f"{save_dir}/rgb.npy", rgb)        
+        np.save(f"{save_dir}/mask.npy", mask)
+        np.save(f"{save_dir}/depth.npy", depth)
+        with open(f"{save_dir}/meta_data.pkl", "wb") as f:
+            pickle.dump(metadata, f)
 
         return rgb, mask, depth, metadata
 
