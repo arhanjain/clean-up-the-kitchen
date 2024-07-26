@@ -7,12 +7,13 @@ import os
 import pickle
 import torch
 
-from M2T2.m2t2.dataset_utils import sample_points, denormalize_rgb, sample_points, jitter_gaussian
-from M2T2.m2t2.dataset import collate
-from M2T2.m2t2.m2t2 import M2T2
-from M2T2.m2t2.plot_utils import get_set_colors
-from M2T2.m2t2.train_utils import to_cpu, to_gpu
-from M2T2.m2t2.meshcat_utils import (
+from m2t2.dataset_utils import sample_points, depth_to_xyz, normalize_rgb
+from m2t2.dataset import collate
+from m2t2.m2t2 import M2T2
+from m2t2.plot_utils import get_set_colors
+from m2t2.train_utils import to_cpu, to_gpu
+from m2t2.dataset_utils import denormalize_rgb, sample_points, jitter_gaussian
+from m2t2.meshcat_utils import (
     create_visualizer, make_frame, visualize_grasp, visualize_pointcloud
 )
 import omni.isaac.lab.utils.math as math
@@ -185,19 +186,28 @@ def visualize(cfg, data, outputs):
 
 def pos_and_quat_from_matrix(transform_mat):
     pos = transform_mat[:3, -1].clone()
+
+    # Extract rotation matrix from the transformation matrix and convert to quaternion
     rotation_matrix = transform_mat[:3, :3]
+
     quat = math.quat_from_matrix(rotation_matrix)
+    euler_angles = math.euler_xyz_from_quat(quat[None]) 
 
-    quat_tensor = quat.clone().reshape(1, 4)
-    roll, pitch, yaw = math.euler_xyz_from_quat(quat_tensor) # Takes in (N, 4)
+    # Unpack the tuple
+    roll, pitch, yaw = euler_angles
 
+    yaw -= np.pi/2 # rotate to account for rotated frame between m2t2 and isaac
+
+    # Adjust the yaw angle
     if yaw > np.pi / 2:
         yaw -= np.pi
     if yaw < -np.pi / 2:
         yaw += np.pi
 
-    adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw)
-    return pos, adjusted_quat[0] # Make it back into (4,)
+    # Convert the adjusted Euler angles back to quaternion
+    adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).squeeze()
+
+    return pos, adjusted_quat
 
 def normalize_rgb_batches(rgb):
     rgb = rgb[:, :, :, :3]  

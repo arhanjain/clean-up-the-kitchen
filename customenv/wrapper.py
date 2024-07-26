@@ -1,4 +1,5 @@
 import torch
+import pickle
 import numpy as np
 import omni.isaac.lab.utils.math as math
 
@@ -40,11 +41,6 @@ class TestWrapper(Wrapper):
         seg = self.scene["camera"].data.output["semantic_segmentation"]
         mask = torch.clamp(seg-1, max=1).cpu().numpy().astype(np.uint8) * 255
         
-        # For debugging purposes
-        save_dir = "/home/jacob/projects/clean-up-the-kitchen/data"
-        Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
-        Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
-
         # Depth values per pixel
         depth = self.scene["camera"].data.output["distance_to_image_plane"]
 
@@ -77,7 +73,15 @@ class TestWrapper(Wrapper):
         metadata["ee_pose"] = ee_pose
         metadata["label_map"] = None
 
-        return rgb, mask, depth, metadata
+        # For debugging purposes
+        save_dir = "/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/data"
+        Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
+        Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
+        np.save(f"{save_dir}/depth.npy", depth.cpu().numpy()[0])
+        with open(f"{save_dir}/meta_data.pkl", "wb") as f:
+            pickle.dump(metadata, f)
+
+        return rgb[0][None], mask[0][None], depth[0][None], metadata
 
 
     def goal_pose(self):

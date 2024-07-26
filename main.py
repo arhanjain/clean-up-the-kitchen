@@ -23,6 +23,10 @@ import numpy as np
 import gymnasium as gym
 from grasp_utils import load_and_predict, visualize, pos_and_quat_from_matrix
 from omni.isaac.lab_tasks.utils import parse_env_cfg
+from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
+import omni.isaac.lab.sim as sim_utils
+from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
+
 from planner import MotionPlanner
 from customenv import TestWrapper
 from omegaconf import OmegaConf
@@ -47,6 +51,7 @@ def main():
     for _ in range(10):
         action = torch.tensor(env.action_space.sample()).to(env.device)
         env.step(action)
+
     # Simulate environment
     print("begin!")
     while simulation_app.is_running():
@@ -54,10 +59,21 @@ def main():
         joint_pos, joint_vel, joint_names = env.get_joint_info()
         rgb, seg, depth, meta_data = env.get_camera_data()
         # Load and predict grasp points
-        cfg = OmegaConf.load("/home/jacob/projects/clean-up-the-kitchen/M2T2/config.yaml")
+        cfg = OmegaConf.load("./grasp_config.yaml")
         data, outputs = load_and_predict(cfg, meta_data, rgb, depth, seg)
         # Visualize through meshcat-viewer, how can we visualize the batches seperatly.  
         visualize(cfg, data, outputs)
+
+        marker_cfg = VisualizationMarkersCfg(
+            prim_path="/Visuals/graspviz",
+            markers={
+                "frame": sim_utils.UsdFileCfg(
+                    usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
+                    scale=(0.5, 0.5, 0.5),
+                ),
+            }
+        )
+        marker = VisualizationMarkers(marker_cfg)
 
         # Check if there are any grasps
         pos = quat = None
@@ -69,7 +85,7 @@ def main():
 
             success = False
             for i in range(grasps.shape[0]):
-                best_grasp = torch.tensor(grasps[i], dtype=torch.float32)
+                best_grasp = torch.tensor(grasps[i]).float()
                 pos, quat = pos_and_quat_from_matrix(best_grasp)
 
                 # Move directly to the grasp position
@@ -86,11 +102,13 @@ def main():
                         action = torch.cat((pose, gripper), dim=1)
                         env.step(action)
                         final_pose = plan[-1]
+
+                        marker.visualize(final_pose[:, :3], final_pose[:, 3:])
                         print('final pose', final_pose)
-                        for _ in range(10):
-                            gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
-                            action = torch.cat((final_pose.clone(), gripper_close), dim=1)
-                            env.step(action)
+                    for _ in range(10):
+                        gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
+                        action = torch.cat((final_pose.clone(), gripper_close), dim=1)
+                        env.step(action)
         else:
             print("No successful grasp found")
 
