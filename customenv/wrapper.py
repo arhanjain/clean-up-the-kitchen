@@ -75,13 +75,28 @@ class TestWrapper(Wrapper):
 
         # For debugging purposes
         save_dir = "/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/data"
-        Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
-        Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
-        np.save(f"{save_dir}/depth.npy", depth.cpu().numpy()[0])
+
+
+        # everything should be numpy
+        # Remove 4th channel for rgb
+        # Make num_envs verisonos of metadaTA
+        rgb = rgb[..., :-1].cpu().numpy()
+        mask = mask
+        depth = depth.cpu().numpy()
+        metadata = [metadata for _ in range(rgb.shape[0])]
+
+        np.save(f"{save_dir}/rgb.npy", rgb)        
+        np.save(f"{save_dir}/mask.npy", mask)
+        np.save(f"{save_dir}/depth.npy", depth)
         with open(f"{save_dir}/meta_data.pkl", "wb") as f:
             pickle.dump(metadata, f)
 
-        return rgb[0][None], mask[0][None], depth[0][None], metadata
+        # Image.fromarray(rgb[0].cpu().numpy()).convert("RGB").save(f"{save_dir}/rgb.png")
+        # Image.fromarray(mask[0], mode="L").save(f"{save_dir}/seg.png")
+        # np.save(f"{save_dir}/depth.npy", depth.cpu().numpy()[0])
+
+        # return rgb[0][None], mask[0][None], depth[0][None], metadata
+        return rgb, mask, depth, metadata
 
 
     def goal_pose(self):
