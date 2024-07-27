@@ -128,17 +128,23 @@ class CubeSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
 
         site_pattern = r"^SiteXform_\d+$"
+        xform_263_pos = None
         for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
             name = entry.GetName()
             if re.match(site_pattern, name):
                 # handle site
-                pass
+                transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+                transform = torch.tensor(transform)
+                pos, _ = pos_and_quat_from_matrix(transform)
+
+                offset = pos - xform_263_pos
+
                 # number = name.split("_")[-1]
-                # objs[name] = SiteCfg(
-                #     prim_path=f"{{ENV_REGEX_NS}}/Xform_{number}",
-                #     debug_vis=True,
-                #     # offset=(0,0,0.5)
-                # )
+                objs[name] = SiteCfg(
+                    prim_path=f"{{ENV_REGEX_NS}}/Xform_{263}",
+                    debug_vis=True,
+                    offset=offset
+                )
             else:
                 transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
                 transform = torch.tensor(transform)
@@ -155,6 +161,10 @@ class CubeSceneCfg(InteractiveSceneCfg):
                         semantic_tags=[("class", "obj")],
                     )
                 )
+
+                if name == "Xform_263":
+                    xform_263_pos = pos
+
         
 
         for k, v in objs.items():
@@ -272,6 +282,17 @@ class RewardsCfg:
         weight=1.0
     )
 
+    # in the future turn this into a distance to command goal, not object
+    obj_to_site = RewTerm(
+        func=mdp.object_to_object_distance,
+        params={
+            "std":0.3,
+            "object1_cfg": SceneEntityCfg("SiteXform_267"),
+            "object2_cfg": SceneEntityCfg("Xform_266"),
+        },
+        weight=2.0
+    )
+
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
@@ -279,7 +300,7 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
     object_dropping = DoneTerm(
-        func=mdp.root_height_below_minimum, params={"minimum_height": -0.1, "asset_cfg": SceneEntityCfg("Xform_266")}
+        func=mdp.root_height_below_minimum, params={"minimum_height": -0.3, "asset_cfg": SceneEntityCfg("Xform_266")}
     )
 
 

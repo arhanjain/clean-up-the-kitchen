@@ -1,18 +1,19 @@
 from datetime import datetime
 from dataclasses import asdict, dataclass
 from omni.isaac.lab.utils import configclass
+from typing import Tuple, Callable
 
 @configclass
 class GeneralCfg:
-  usd_path: str = "/home/arhan/Downloads/bowlsite.usdz"
-  log_dir: str = f"/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/logs/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+  usd_path: str = "/home/arhan/Downloads/bowl2sink.usdz"
+  log_dir: str = f"/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/logs"
 
 
 @configclass
 class SB3Cfg:
   seed: int = 42
 
-  n_timesteps: float = 1e7
+  n_timesteps: float = 1e10
   policy: str = 'MlpPolicy'
   batch_size: int = 128
   n_steps: int =  512
@@ -34,8 +35,14 @@ class SB3Cfg:
                             net_arch=dict(pi=[256, 256], vf=[256, 256])
                         )'''
 
-  def dict(self):
-    return asdict(self)
+class VideoCfg:
+  viewer_resolution: Tuple[int, int] = (320, 240)
+  viewer_eye: Tuple[float, float, float] = (-4.2, -2.5, 2.0)
+  viewer_lookat: Tuple[float, float, float] = (3.8, 2.7, -1.2)
+  video_folder: str = "videos"
+  save_steps: int = 2500
+  video_length: int = 250
+
 
 
 # default:

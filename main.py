@@ -17,7 +17,6 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 ########################################
-
 import os
 import torch
 import numpy as np
@@ -33,13 +32,15 @@ from customenv import TestWrapper
 from planner import MotionPlanner
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 from omni.isaac.lab_tasks.utils.wrappers.sb3 import process_sb3_cfg, Sb3VecEnvWrapper
-from configuration import SB3Cfg, GeneralCfg
+from configuration import SB3Cfg, GeneralCfg, VideoCfg
+from datetime import datetime
 
 def main():
     # Initialize dataclass configs
     general_cfg = GeneralCfg().to_dict()
     sb_cfg = SB3Cfg().to_dict()
-    log_dir = general_cfg["log_dir"]
+    viewer_cfg = VideoCfg().to_dict()
+    log_dir = f"{general_cfg['log_dir']}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 
     # create environment configuration
     env_cfg = parse_env_cfg(
@@ -47,8 +48,15 @@ def main():
     )
     env_cfg.setup(general_cfg)
 
+    #video wrapper stuff
+    env_cfg.viewer.resolution = viewer_cfg.pop("viewer_resolution")
+    env_cfg.viewer.eye = viewer_cfg.pop("viewer_eye")
+    env_cfg.viewer.lookat = viewer_cfg.pop("viewer_lookat")
+    video_kwargs = viewer_cfg
+
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
+    env = gym.wrappers.RecordVideo(env, **video_kwargs)
     env = TestWrapper(env)
 
     print(f"[INFO]: Gym observation space: {env.observation_space}")
@@ -68,7 +76,7 @@ def main():
     agent.set_logger(new_logger)
 
      # callbacks for agent
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path=log_dir, name_prefix="model", verbose=2)
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=log_dir, name_prefix="model", verbose=2)
     # train the agent
     agent.learn(total_timesteps=n_timesteps, callback=checkpoint_callback)
     # save the final model
@@ -76,35 +84,6 @@ def main():
 
     # close the simulator
     env.close()
-
-    # # reset environment
-    # obs, info = env.reset()
-    # planner = MotionPlanner(env)
-    # # simulate environment
-    # while simulation_app.is_running():
-    #     # run everything in inference mode
-    #     joint_pos, joint_vel, joint_names = env.get_joint_info()
-    #     # goal = torch.tensor([0.5, -0.5, 0.7, 0.707, 0, 0.707, 0]).repeat(env.num_envs, 1).to(env.unwrapped.device)
-    #     goal = env.command_manager.get_command("object_pose")
-    #     plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
-    #     with torch.inference_mode():
-    #         if not success:
-    #             env.reset()
-    #             continue
-    #         plan = planner.pad_and_format(plan)
-    #         for pose in plan:
-    #             gripper = torch.ones(env.num_envs, 1).to(0)
-    #             try:
-    #                 action = torch.cat((pose, gripper), dim=1)
-    #             except:
-    #                 breakpoint()
-    #                 plan = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
-    #             obs = env.step(action)
-    #             breakpoint()
-    #             # im = env.get_camera_data()
-
-    # # close the simulator
-    # env.close()
 
 
 if __name__ == "__main__":
