@@ -63,6 +63,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
     #     ),
     # )
 
+
     # plane
     plane = AssetBaseCfg(
         prim_path="/World/GroundPlane",
@@ -101,7 +102,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
-            debug_vis=False,
+            debug_vis=True,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
@@ -170,17 +171,6 @@ class CubeSceneCfg(InteractiveSceneCfg):
         for k, v in objs.items():
             setattr(self, k, v)
 
-        
-
-def pos_and_quat_from_matrix(transform_mat):
-    pos = transform_mat[-1, :3]
-    temp = pos.clone()
-    pos[2] = temp[1]
-    pos[1] = -temp[2]
-    quat = math.quat_from_matrix(transform_mat[:3, :3])
-    return pos, quat
-
-
 
 @configclass
 class CommandsCfg:
@@ -190,7 +180,7 @@ class CommandsCfg:
         asset_name="robot",
         body_name="panda_hand",  # will be set by agent env cfg
         resampling_time_range=(5.0, 5.0),
-        debug_vis=True,
+        debug_vis=False,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
             pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.15, 0.15), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
         ),
