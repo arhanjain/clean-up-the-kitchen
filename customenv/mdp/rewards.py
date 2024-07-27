@@ -25,6 +25,26 @@ def object_is_lifted(
     return torch.where(object.data.root_pos_w[:, 2] > minimal_height, 1.0, 0.0)
 
 
+def object_to_object_distance(
+    env: ManagerBasedRLEnv,
+    std: float,
+    object1_cfg: SceneEntityCfg = SceneEntityCfg("object"),
+    object2_cfg: SceneEntityCfg = SceneEntityCfg("object"),
+) -> torch.Tensor:
+    """Reward the agent for reaching the object using tanh-kernel."""
+    # extract the used quantities (to enable type-hinting)
+    object1: RigidObject = env.scene[object1_cfg.name]
+    object2: RigidObject = env.scene[object2_cfg.name]
+
+    # object positions: (num_envs, 3)
+    object1_pos = object1.data.site_pos_w
+    object2_pos = object2.data.root_pos_w
+
+    # Distance of the end-effector to the object: (num_envs,)
+    dist = torch.norm(object2_pos - object1_pos, dim=1)
+
+    return 1 - torch.tanh(dist / std)
+
 def object_ee_distance(
     env: ManagerBasedRLEnv,
     std: float,
