@@ -35,13 +35,15 @@ class SB3Cfg:
                             net_arch=dict(pi=[256, 256], vf=[256, 256])
                         )'''
 
+@configclass
 class VideoCfg:
-  viewer_resolution: Tuple[int, int] = (320, 240)
-  viewer_eye: Tuple[float, float, float] = (-4.2, -2.5, 2.0)
-  viewer_lookat: Tuple[float, float, float] = (3.8, 2.7, -1.2)
-  video_folder: str = "videos"
-  save_steps: int = 2500
-  video_length: int = 250
+    enabled: bool = False
+    viewer_resolution: Tuple[int, int] = (320, 240)
+    viewer_eye: Tuple[float, float, float] = (-4.2, -2.5, 2.0)
+    viewer_lookat: Tuple[float, float, float] = (3.8, 2.7, -1.2)
+    video_folder: str = "videos"
+    save_steps: int = 2500
+    video_length: int = 250
 
 
 

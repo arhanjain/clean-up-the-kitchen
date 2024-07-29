@@ -35,19 +35,21 @@ class TestWrapper(Wrapper):
         
         # RGB Image
         rgb = self.scene["camera"].data.output["rgb"]
-
         
-        # Mask 
-        seg = self.scene["camera"].data.output["semantic_segmentation"]
-        mask = torch.clamp(seg-1, max=1).cpu().numpy().astype(np.uint8) * 255
+        # Segmentation
+        seg = self.scene["camera"].data.output["semantic_segmentation"].cpu().numpy()
+        label_maps = []
+        for info in self.scene["camera"].data.info:
+            mapping = {}
+            for k, v in info["semantic_segmentation"]["idToLabels"].items():
+                mapping[v["class"]] = int(k)
+            label_maps.append(mapping)
         
         # Depth values per pixel
         depth = self.scene["camera"].data.output["distance_to_image_plane"]
 
         # Assemble metadata
-        metadata = {}
-        intrinsics = self.scene["camera"].data.intrinsic_matrices[0]
-
+        intrinsics = self.scene["camera"].data.intrinsic_matrices
         # camera pose
         cam_pos_w = self.scene["camera"].data.pos_w
         cam_quat_w = self.scene["camera"].data.quat_w_ros
@@ -59,39 +61,35 @@ class TestWrapper(Wrapper):
             robot_pos_w, robot_quat_w,
             cam_pos_w, cam_quat_w
         )
-        transformation = misc_utils.pos_and_quat_to_matrix(cam_pos_r, cam_quat_r)
-
-        # filler from existing file
-        ee_pose = np.array([[ 0.02123945,  0.82657526,  0.56242531,  0.18838109],
-        [ 0.99974109, -0.02215279, -0.00519713, -0.01743025],
-        [ 0.00816347,  0.56239007, -0.82683176,  0.6148137 ],
-        [ 0.        ,  0.        ,  0.        ,  1.        ]])
-        scene_bounds = np.array([-0.4, -0.8, -0.2, 1.2, 0.8, 0.6])
-
-        metadata["intrinsics"] = intrinsics.cpu().numpy()
-        metadata["camera_pose"] = transformation[0]
-        metadata["ee_pose"] = ee_pose
-        metadata["label_map"] = None
+        cam_transformation = misc_utils.pos_and_quat_to_matrix(cam_pos_r, cam_quat_r)
+        ee_frame = self.scene["ee_frame"]
+        ee_transfomration = misc_utils.pos_and_quat_to_matrix(ee_frame.data.target_pos_source.squeeze(), ee_frame.data.target_quat_source.squeeze())
+        
+        metadata = []
+        for i in range(self.num_envs):
+            m = {
+                    "intrinsics": intrinsics[i].cpu().numpy(),
+                    "camera_pose": cam_transformation[i],
+                    "ee_pose": ee_transfomration[i],
+                    "label_map": label_maps[i]
+                }
+            metadata.append(m)
 
         # For debugging purposes
-        save_dir = "/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/data"
-
-
+        save_dir = "./data"
         # everything should be numpy
         # Remove 4th channel for rgb
-        # Make num_envs verisonos of metadaTA
         rgb = rgb[..., :-1].cpu().numpy()
-        mask = mask
+        seg = seg
         depth = depth.cpu().numpy()
-        metadata = [metadata for _ in range(rgb.shape[0])]
 
         np.save(f"{save_dir}/rgb.npy", rgb)        
-        np.save(f"{save_dir}/mask.npy", mask)
+        np.save(f"{save_dir}/mask.npy", seg)
         np.save(f"{save_dir}/depth.npy", depth)
         with open(f"{save_dir}/meta_data.pkl", "wb") as f:
             pickle.dump(metadata, f)
 
-        return rgb, mask, depth, metadata
+        return rgb, seg, depth, metadata
 
 
     def goal_pose(self):

@@ -30,7 +30,7 @@ from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
 from pxr import Usd, Sdf
-from .utils import usd_utils
+from .utils import usd_utils, misc_utils
 from .sensor import SiteCfg
 
 @configclass
@@ -43,26 +43,6 @@ class CubeSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = FRANKA_PANDA_HIGH_PD_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot"
     )
-
-    # whole scene cant be 1 rigid object
-    # object = RigidObjectCfg(
-    #     prim_path="{ENV_REGEX_NS}/Object",
-    #     init_state=RigidObjectCfg.InitialStateCfg(pos=[0.5, 0, 0.05], rot=[1, 0, 0, 0]),
-    #     spawn=UsdFileCfg(
-    #         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd",
-    #         scale=(0.8, 0.8, 0.8),
-    #         rigid_props=RigidBodyPropertiesCfg(
-    #             solver_position_iteration_count=16,
-    #             solver_velocity_iteration_count=1,
-    #             max_angular_velocity=1000.0,
-    #             max_linear_velocity=1000.0,
-    #             max_depenetration_velocity=5.0,
-    #             disable_gravity=False,
-    #         ),
-    #         semantic_tags=[("class", "cube")]
-    #     ),
-    # )
-
 
     # plane
     plane = AssetBaseCfg(
@@ -77,19 +57,19 @@ class CubeSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
     )
 
-    # camera = CameraCfg(
-    #     prim_path="{ENV_REGEX_NS}/table_cam",
-    #     update_period=0.1,
-    #     height=480,
-    #     width=640,
-    #     data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
-    #     spawn=sim_utils.PinholeCameraCfg(
-    #         focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
-    #     ),
-    #     offset=CameraCfg.OffsetCfg(pos=(2.0, 0.0, 1.0), rot=(-0.612, -0.353, -0.353, -0.612), convention="opengl"),
-    #     semantic_filter="class:*",
-    #     colorize_semantic_segmentation=False,
-    # )
+    camera = CameraCfg(
+        prim_path="{ENV_REGEX_NS}/table_cam",
+        update_period=0.1,
+        height=480,
+        width=640,
+        data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
+        ),
+        offset=CameraCfg.OffsetCfg(pos=(-0.7, 1.1, 1.0), rot=(0.4, 0.27, -0.45, -0.75), convention="opengl"),
+        semantic_filter="class:*",
+        colorize_semantic_segmentation=False,
+    )
 
     def __post_init__(self):
         # post init of parent
@@ -119,9 +99,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
     def setup(self, cfg):
         # parse and add USD
         objs = {}
-        # usd_path = "/home/arhan/Downloads/scene/model.usda"
         usd_path = cfg["usd_path"]
-        # usd_path = "/home/arhan/Downloads/scene/model.usda"
         usd_stage = Usd.Stage.Open(usd_path)
         
         marker_cfg = FRAME_MARKER_CFG.copy()
@@ -136,7 +114,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
                 # handle site
                 transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
                 transform = torch.tensor(transform)
-                pos, _ = pos_and_quat_from_matrix(transform)
+                pos, _ = misc_utils.GUI_matrix_to_pos_and_quat(transform)
 
                 offset = pos - xform_263_pos
 
@@ -149,7 +127,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
             else:
                 transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
                 transform = torch.tensor(transform)
-                pos, quat = pos_and_quat_from_matrix(transform)
+                pos, quat = misc_utils.GUI_matrix_to_pos_and_quat(transform)
                 # pos, quat = (0,0,0), (1,0,0,0)
                 objs[name] = RigidObjectCfg(
                     prim_path=f"{{ENV_REGEX_NS}}/{name}",
