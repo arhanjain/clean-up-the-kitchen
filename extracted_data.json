@@ -1,0 +1,100 @@
+{
+    "/home/jacob/Downloads/usdz/bowl2sink.usdz": [
+        {
+            "name": "SiteXform_267",
+            "path": "/World/SiteXform_267",
+            "type": "Xform",
+            "attributes": {
+                "purpose": "default",
+                "visibility": "inherited",
+                "xformOp:transform": [
+                    [
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ]
+                ],
+                "xformOpOrder": "[xformOp:transform]"
+            },
+            "relationships": {
+                "proxyPrim": []
+            },
+            "children": [
+                {
+                    "name": "Object_267",
+                    "path": "/World/SiteXform_267/Object_267",
+                    "type": "Xform",
+                    "attributes": {
+                        "physics:angularVelocity": "(0, 0, 0)",
+                        "physics:centerOfMass": "(-inf, -inf, -inf)",
+                        "physics:density": "0.0",
+                        "physics:diagonalInertia": "(0, 0, 0)",
+                        "physics:kinematicEnabled": "False",
+                        "physics:mass": "0.0010000000474974513",
+                        "physics:principalAxes": "(0, 0, 0, 0)",
+                        "physics:rigidBodyEnabled": "True",
+                        "physics:startsAsleep": "False",
+                        "physics:velocity": "(0, 0, 0)",
+                        "physxRigidBody:maxLinearVelocity": "1000.0",
+                        "physxRigidBody:sleepThreshold": "0.5",
+                        "purpose": "default",
+                        "visibility": "inherited",
+                        "xformOp:transform": [
+                            [
+                                1.0,
+                                0.0,
+                                0.0,
+                                0.0
+                            ],
+                            [
+                                0.0,
+                                6.123233995736766e-17,
+                                -1.0,
+                                0.0
+                            ],
+                            [
+                                0.0,
+                                1.0,
+                                6.123233995736766e-17,
+                                0.0
+                            ],
+                            [
+                                0.56393719080776,
+                                -0.1273720863285072,
+                                -0.0640865842049112,
+                                1.0
+                            ]
+                        ],
+                        "xformOpOrder": "[xformOp:transform]"
+                    },
+                    "relationships": {
+                        "material:binding": [
+                            "/World/Xform_267/Object_267/Material_184"
+                        ],
+                        "physics:simulationOwner": [],
+                        "proxyPrim": []
+                    }
+                }
+            ]
+        }
+    ]
+}
