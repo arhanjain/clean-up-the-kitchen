@@ -69,7 +69,6 @@ class MotionPlanner:
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
             collision_cache={"obb": 30, "mesh": 100},
-            # maximum_trajectory_dt=0.25, 
         )
         self.motion_gen = MotionGen(motion_gen_config)
         # print("warming up...")
@@ -112,8 +111,12 @@ class MotionPlanner:
             quaternion=goal_orientation
         )
         self.plan_config.pose_cost_metric = None
-        # result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
-        result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
+        result = None
+        if len(ik_goal) == 1:
+            result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
+            result = result[None]
+        else: 
+            result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
         if result.status == MotionGenStatus.TRAJOPT_FAIL:
             print('TRAJOPT_FAIL')
             return None, False
@@ -129,7 +132,19 @@ class MotionPlanner:
             return ee_trajs, True
         else:
             raise ValueError("Invalid mode...")
-    
+
+    def test_format(self, trajs, maxpad=500):
+            # pad out all
+            trajs = [torch.cat((traj.ee_position, traj.ee_quaternion), dim=1) for traj in trajs]
+            lengths = [len(traj) for traj in trajs]
+            max_time = maxpad
+            padded_tensors = []
+            for traj in trajs:
+                pad = torch.zeros(max_time - len(traj), 7).to(self.device)
+                padded = torch.cat((traj, pad), dim=0)
+                padded_tensors.append(padded)
+            ends = torch.tensor(lengths, dtype=torch.int32).to(self.device) - 1
+            return torch.stack(padded_tensors), ends
     def pad_and_format(self, trajs):
             # pad out all
             trajs = [torch.cat((traj.ee_position, traj.ee_quaternion), dim=1) for traj in trajs]

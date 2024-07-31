@@ -96,10 +96,12 @@ def main():
         # Run everything in inference mode
         joint_pos, joint_vel, joint_names = env.get_joint_info()
         rgb, seg, depth, meta_data = env.get_camera_data()
+        # for m in meta_data:
+        #     m["object_label"] = "obj"
         loaded_data = rgb, seg, depth, meta_data
 
         # Load and predict grasp points
-        data, outputs = load_and_predict(loaded_data, grasp_cfg)
+        data, outputs = load_and_predict(loaded_data, grasp_cfg, obj_label="obj")
         # Visualize through meshcat-viewer, how can we visualize the batches seperatly.
         visualize(grasp_cfg, data[0], {k: v[0] for k, v in outputs.items()})
 
@@ -138,6 +140,7 @@ def main():
          pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
          goal = torch.cat([pos, quat], dim=1)
          plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
+         breakpoint()
 
          if success:
              with torch.inference_mode():

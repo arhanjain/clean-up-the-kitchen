@@ -71,7 +71,8 @@ class TestWrapper(Wrapper):
                     "intrinsics": intrinsics[i].cpu().numpy(),
                     "camera_pose": cam_transformation[i],
                     "ee_pose": ee_transfomration[i],
-                    "label_map": label_maps[i]
+                    "label_map": label_maps[i],
+                    "scene_bounds": [-0.4, -0.8, -0.2, 1.2, 0.8, 0.6],
                 }
             metadata.append(m)
 

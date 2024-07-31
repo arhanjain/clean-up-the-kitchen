@@ -101,11 +101,13 @@ def load_rgb_xyz(
     return outputs, meta_data
 
 
-def load_and_predict(loaded_data, cfg):
+def load_and_predict(loaded_data, model, cfg, obj_label = None):
     data, meta_data= [], []
     batch_size = loaded_data[0].shape[0]
     for i in range(batch_size):
         batch_element = [elem[i] for elem in loaded_data]
+        if obj_label: # add object label to metadata
+            batch_element[-1]["object_label"] = obj_label
         d, meta = load_rgb_xyz(
             batch_element, cfg.data.robot_prob,
             cfg.data.world_coord, cfg.data.jitter_scale,
@@ -131,10 +133,10 @@ def load_and_predict(loaded_data, cfg):
         meta_data.append(meta)
 
 
-    model = M2T2.from_config(cfg.m2t2)
-    ckpt = torch.load(cfg.eval.checkpoint)
-    model.load_state_dict(ckpt['model'])
-    model = model.cuda().eval()
+    # model = M2T2.from_config(cfg.m2t2)
+    # ckpt = torch.load(cfg.eval.checkpoint)
+    # model.load_state_dict(ckpt['model'])
+    # model = model.cuda().eval()
 
     outputs = {
         'grasps': [],
@@ -164,6 +166,37 @@ def load_and_predict(loaded_data, cfg):
     # data['object_inputs'] = obj_inputs
     return data, outputs
 
+def choose_grasp(outputs):
+    '''
+    Takes in the output of load_and_predict. Input will have N environments, out 
+    of which M will be successes. Outputs the best grasp per environment
+    in the form of pos: (M, 3), quat: (M, 4). Also reports whether grasp prediction
+    was successful (length N)
+
+    Returns: (pos, quat), success: np.array(bool)
+    '''
+    best_grasps = []
+    successes = []
+    for i in range(len(outputs["grasps"])): # iterates num envs
+        if len(outputs["grasps"][i]) == 0:
+            successes.append(False)
+            continue
+        grasps = np.concatenate(outputs["grasps"][i], axis=0)
+        grasp_conf = np.concatenate(outputs["grasp_confidence"][i], axis=0)
+        sorted_grasp_idxs = np.argsort(grasp_conf, axis=0) # ascending order of confidence
+        grasps = grasps[sorted_grasp_idxs]
+        best_grasps.append(grasps[-1])
+        successes.append(True)
+    
+    # Turn grasp poses from M2T2 form to Isaac form
+    best_grasps = torch.tensor(best_grasps)
+    if len(best_grasps) == 0:
+        pos, quat = None
+    else:
+        pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
+    return (pos, quat), np.array(successes)
+
+
 def m2t2_grasp_to_pos_and_quat(transform_mat):
     pos = transform_mat[..., :3, -1].clone()
 
@@ -183,7 +216,7 @@ def m2t2_grasp_to_pos_and_quat(transform_mat):
     yaw = torch.where(yaw > np.pi/2, yaw + np.pi, yaw)
 
     # Convert the adjusted Euler angles back to quaternion
-    adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).squeeze()
+    adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).view(-1, 4)
 
     return pos, adjusted_quat
 

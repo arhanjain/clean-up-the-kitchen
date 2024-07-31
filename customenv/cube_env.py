@@ -89,7 +89,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
                     prim_path="{ENV_REGEX_NS}/Robot/panda_hand",
                     name="end_effector",
                     offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.1034],
+                        pos=[0.0, 0.0, 0.0],
                     ),
                 ),
             ],
@@ -137,7 +137,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
                         usd_sub_path=entry.GetPath().pathString,
                         rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True if name == "Xform_263" else False),
                         collision_props=CollisionPropertiesCfg(),
-                        semantic_tags=[("class", "obj")],
+                        semantic_tags=[("class", "obj")] if name == "Xform_266" else [],
                     )
                 )
 
@@ -158,9 +158,9 @@ class CommandsCfg:
         asset_name="robot",
         body_name="panda_hand",  # will be set by agent env cfg
         resampling_time_range=(5.0, 5.0),
-        debug_vis=False,
+        debug_vis=True,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.15, 0.15), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
+            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.3, 0.4), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
         ),
     )
 

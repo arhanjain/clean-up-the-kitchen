@@ -1,6 +1,6 @@
 data:
     root_dir: ''
-    num_points: 16384
+    num_points: 25000
     num_object_points: 1024
     world_coord: True
     num_rotations: 8
