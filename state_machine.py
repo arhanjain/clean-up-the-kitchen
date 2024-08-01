@@ -38,12 +38,16 @@ from numpy import dtype
 from omni.isaac.lab_tasks.utils.parse_cfg import parse_env_cfg
 from planner import MotionPlanner
 from customenv import TestWrapper
-from grasp_utils import load_and_predict, visualize, m2t2_grasp_to_pos_and_quat
-import grasp_utils
+from grasp import load_and_predict, visualize, m2t2_grasp_to_pos_and_quat
+import grasp
 
 # initialize warp
 wp.init()
 
+plan = [
+    ("pregrasp", "movement"
+
+]
 
 class GripperState:
     """States for the gripper."""
@@ -230,7 +234,7 @@ class PickAndLiftSm:
 
         data, outputs = load_and_predict(loaded_data, grasp_model, grasp_cfg, obj_label="obj")
         visualize(grasp_cfg, data[0], {k: v[0] for k, v in outputs.items()})
-        (goal_pos, goal_quat), success = grasp_utils.choose_grasp(outputs)
+        (goal_pos, goal_quat), success = grasp.choose_grasp(outputs)
         
         # breakpoint()
         #use success to filter what to send into planning

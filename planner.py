@@ -1,8 +1,7 @@
 import torch
-
-# CuRobo
-from curobo.geom.sdf.world import CollisionCheckerType
-from curobo.geom.types import WorldConfig
+# CuRobo 
+from curobo.geom.sdf.world import CollisionCheckerType 
+from curobo.geom.types import WorldConfig 
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.robot import CudaRobotModelConfig, JointState, RobotConfig
@@ -27,9 +26,11 @@ from curobo.wrap.reacher.motion_gen import (
     PoseCostMetric,
 )
 
+from grasp import Grasper
+
     
 class MotionPlanner:
-    def __init__(self, env):
+    def __init__(self, env, grasper: Grasper):
         usd_help = UsdHelper()
 
         usd_help.load_stage(env.scene.stage)
@@ -89,7 +90,44 @@ class MotionPlanner:
         # Forward kinematics
         self.kin_model = CudaRobotModel(robot_cfg.kinematics)
 
+        self.env = env
+        self.grasper = grasper
+
         # update obstacles and stuff
+    def build_plan_from_template(self, plan_template):
+        for action_type, object, location in plan_template:
+            rgb, seg, depth, meta_data = self.env.get_camera_data()
+            loaded_data = rgb, seg, depth, meta_data
+            match action_type:
+                case "move":
+                    # get grasp pose
+                    success = torch.zeros(self.env.num_envs)
+                    while not torch.all(success):
+                        grasp_pose, success = self.grasper.get_grasp(loaded_data, object)
+                    pregrasp_pose = self.grasper.get_pregrasp(grasp_pose, 0.1)
+
+                    # go to pregrasp
+                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
+                    if not success:
+                        print("Failed to plan to pregrasp")
+                        yield None
+                    else:
+                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                        yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+
+                    # go to grasp
+                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    traj, success = self.plan(joint_pos, joint_vel, joint_names, grasp_pose, mode="ee_pose")
+                    if not success:
+                        print("Failed to plan to grasp")
+                        yield None  
+                    else:
+                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                        # traj, traj_length = self.test_format(traj, maxpad=500)
+                        yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+                case _:
+                    raise ValueError("Invalid action type!")
     
     def plan(self, jp, jv, jn, goal, mode="joint_pos"):
 
@@ -114,16 +152,21 @@ class MotionPlanner:
         result = None
         if len(ik_goal) == 1:
             result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
-            result = result[None]
+            traj = result.interpolated_plan[None]
+            if mode == "joint_pos":
+                return traj, True
+            elif mode == "ee_pose":
+                return [self.kin_model.get_state(traj[0].position)], True
+
         else: 
             result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
+            traj = result.get_paths()
         if result.status == MotionGenStatus.TRAJOPT_FAIL:
             print('TRAJOPT_FAIL')
             return None, False
         if result.status == MotionGenStatus.IK_FAIL:
             print("IK FAILURE")
             return None, False
-        traj = result.get_paths()
         if mode == "joint_pos":
             return traj, True
         elif mode == "ee_pose":

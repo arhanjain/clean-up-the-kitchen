@@ -10,7 +10,7 @@ def pos_and_quat_to_matrix(pos, quat):
     num_envs = pos.shape[0]
 
     rot_mat = math.matrix_from_quat(quat)
-    pos = pos.unsqueeze(2)
+    pos = pos.view(-1, 3, 1)
 
     transformation = torch.cat((rot_mat, pos), dim=2).cpu()
 

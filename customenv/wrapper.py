@@ -63,7 +63,8 @@ class TestWrapper(Wrapper):
         )
         cam_transformation = misc_utils.pos_and_quat_to_matrix(cam_pos_r, cam_quat_r)
         ee_frame = self.scene["ee_frame"]
-        ee_transfomration = misc_utils.pos_and_quat_to_matrix(ee_frame.data.target_pos_source.squeeze(), ee_frame.data.target_quat_source.squeeze())
+
+        ee_transfomration = misc_utils.pos_and_quat_to_matrix(ee_frame.data.target_pos_source[:,0], ee_frame.data.target_quat_source[:, 0])
         
         metadata = []
         for i in range(self.num_envs):

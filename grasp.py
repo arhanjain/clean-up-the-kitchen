@@ -18,6 +18,75 @@ from m2t2.meshcat_utils import (
 )
 import omni.isaac.lab.utils.math as math
 
+class Grasper:
+    def __init__(self, model, cfg) -> None:
+        self.model = model
+        self.cfg = cfg
+
+    def get_grasp(self, data, object_class, viz=True):
+        '''
+        Returns best grasp pose on specified object for each environment.
+        Given N environments, only M may be successful. Returned grasp tensor
+        will be of shape M.
+
+        Parameters
+        ----------
+        data: tuple
+            The tuple contains (rgb, seg, depth, meta_data) batched for each environment
+        object_class: str
+            The class of object to grasp, used in semantic segmentation
+        viz: bool
+            Whether to visualize the scene
+
+        Returns
+        -------
+        pose: torch.tensor(float) shape: (M, 7)
+            The position and quaternion of the best grasp pose for each environment
+        success: torch.tensor(bool) shape: (N,)
+            Whether the grasp prediction was successful for each environment
+        '''
+        
+
+        data, outputs = load_and_predict(data, self.model, self.cfg, obj_label=object_class)
+        if viz:
+            visualize(self.cfg, data[0], {k: v[0] for k, v in outputs.items()})
+        (goal_pos, goal_quat), success = choose_grasp(outputs)
+        return torch.cat([goal_pos,goal_quat], dim=1), torch.tensor(success)
+
+    @staticmethod
+    def get_pregrasp(grasp_pose, offset):
+        '''
+        Returns the pregrasp pose for a given grasp pose and offset
+        Parameters
+        ----------
+        grasp_pose: torch.tensor(float) shape: (N, 7)
+            The position and quaternion of the grasp pose
+        offset: float
+            The distance to move away from the original pose
+        Returns
+        -------
+        pregrasp_pose: torch.tensor(float) shape: (N, 7)
+            The position and quaternion of the pregrasp poses
+        '''
+
+        pos, quat = grasp_pose[:, :3], grasp_pose[:, 3:]
+
+        # Normalize quaternions
+        norms = torch.norm(quat, dim=1, keepdim=True)
+        q = quat / norms
+
+        # Calculate direction vectors
+        direction = torch.empty((quat.shape[0], 3), device=quat.device)
+        direction[:, 0] = 2 * (q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3])
+        direction[:, 1] = 2 * (q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3])
+        direction[:, 2] = 1 - 2 * (q[:, 0]**2 + q[:, 1]**2)
+
+        pregrasp = grasp_pose.clone()
+        pregrasp[:, :3] -= offset * direction
+
+        return pregrasp
+
+
 def load_rgb_xyz(
     loaded_data, robot_prob, world_coord, jitter_scale, grid_res, surface_range=0
 ):
@@ -258,3 +327,4 @@ def visualize(cfg, data, outputs):
                     vis, f"object_{i:02d}/grasps/{j:03d}",
                     grasp, color, linewidth=0.2
                 )
+
