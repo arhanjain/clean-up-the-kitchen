@@ -51,6 +51,7 @@ class Grasper:
         if viz:
             visualize(self.cfg, data[0], {k: v[0] for k, v in outputs.items()})
         (goal_pos, goal_quat), success = choose_grasp(outputs)
+
         return torch.cat([goal_pos,goal_quat], dim=1), torch.tensor(success)
 
     @staticmethod
@@ -260,7 +261,7 @@ def choose_grasp(outputs):
     # Turn grasp poses from M2T2 form to Isaac form
     best_grasps = torch.tensor(best_grasps)
     if len(best_grasps) == 0:
-        pos, quat = None
+        pos, quat = torch.zeros(1,1), torch.zeros(1,1)
     else:
         pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
     return (pos, quat), np.array(successes)

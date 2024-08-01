@@ -112,9 +112,10 @@ def main():
         full_plan = planner.build_plan_from_template(plan_template)
         for segment in full_plan:
             if segment is None:
-                continue
+                break
             for i in range(segment.shape[1]):
                 env.step(segment[:, i])
+        env.reset()
     env.close()
     exit()
 

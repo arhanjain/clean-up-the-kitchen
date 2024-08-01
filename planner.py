@@ -126,6 +126,26 @@ class MotionPlanner:
                         traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
                         # traj, traj_length = self.test_format(traj, maxpad=500)
                         yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+
+                    # grasp
+                    ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]
+                    tcp_rest_position = ee_frame_sensor.data.target_pos_source[..., 0, :].clone()
+                    tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
+                    ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
+                    close_gripper = -1 * torch.ones(self.env.num_envs, 1).to(self.device)
+                    yield torch.cat((ee_pose, close_gripper), dim=1).repeat(1, 10, 1)
+
+                    # go to pregrasp
+                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
+                    if not success:
+                        print("Failed to plan to pregrasp")
+                        yield None
+                    else:
+                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                        yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+
+
                 case _:
                     raise ValueError("Invalid action type!")
     
@@ -149,29 +169,34 @@ class MotionPlanner:
             quaternion=goal_orientation
         )
         self.plan_config.pose_cost_metric = None
+
+        # Differentiate between single and batch planning
         result = None
         if len(ik_goal) == 1:
             result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
-            traj = result.interpolated_plan[None]
-            if mode == "joint_pos":
-                return traj, True
-            elif mode == "ee_pose":
-                return [self.kin_model.get_state(traj[0].position)], True
-
+            # if mode == "joint_pos":
+            #     return traj, True
+            # elif mode == "ee_pose":
+            #     return [self.kin_model.get_state(traj[0].position)], True
         else: 
             result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
-            traj = result.get_paths()
+
+        # Check failure cases
         if result.status == MotionGenStatus.TRAJOPT_FAIL:
             print('TRAJOPT_FAIL')
             return None, False
         if result.status == MotionGenStatus.IK_FAIL:
             print("IK FAILURE")
             return None, False
+
+        # Extract the trajectories based on single vs batch
+        traj = [result.interpolated_plan] if len(ik_goal) == 1 else result.get_paths()
+
+        # Return in desired format
         if mode == "joint_pos":
             return traj, True
         elif mode == "ee_pose":
             ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
-            
             return ee_trajs, True
         else:
             raise ValueError("Invalid mode...")
