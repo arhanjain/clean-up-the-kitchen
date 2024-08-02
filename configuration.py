@@ -5,7 +5,7 @@ from typing import Tuple, Callable
 
 @configclass
 class GeneralCfg:
-  usd_path: str = "/home/arhan/Downloads/bowl2sink.usdz"
+  usd_path: str = "/home/arhan/Downloads/bowl2sink/model.usda"
   log_dir: str = f"/home/arhan/projects/IsaacLab/source/standalone/clean-up-the-kitchen/logs"
 
 
