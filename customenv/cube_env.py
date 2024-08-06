@@ -3,6 +3,8 @@ from dataclasses import MISSING
 import torch
 import re
 import numpy as np
+import yaml
+from configuration import GeneralCfg
 from omni.isaac.lab.markers.visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 import omni.isaac.lab.utils.math as math
@@ -91,60 +93,90 @@ class CubeSceneCfg(InteractiveSceneCfg):
                     offset=OffsetCfg(
                         pos=[0.0, 0.0, 0.0],
                     ),
-                ),
+             ),
             ],
         )
 
     
-    def setup(self, cfg):
+    def setup(self, cfg: GeneralCfg):
         # parse and add USD
         objs = {}
-        usd_path = cfg["usd_path"]
+        with open(cfg.usd_info) as f:
+            usd_info = yaml.safe_load(f)
+        usd_path = usd_info["usd_path"]
         usd_stage = Usd.Stage.Open(usd_path)
         
         marker_cfg = FRAME_MARKER_CFG.copy()
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
 
-        site_pattern = r"^SiteXform_\d+$"
-        xform_263_pos = None
-        for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
-            name = entry.GetName()
-            if re.match(site_pattern, name):
-                # handle site
-                transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-                transform = torch.tensor(transform)
-                pos, _ = misc_utils.GUI_matrix_to_pos_and_quat(transform)
+        positions = {}
+        for name, attributes in usd_info["xforms"].items():
+            pos, quat = attributes["position"], attributes["quaternion"]
+            usd_sub_path = attributes["subpath"]
+            objs[name] = RigidObjectCfg(
+                prim_path=f"{{ENV_REGEX_NS}}/{name}",
+                init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
+                spawn=usd_utils.CustomRigidUSDCfg(
+                    usd_path=usd_path,
+                    usd_sub_path=usd_sub_path,
+                    rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=attributes["disable_gravity"]),
+                    collision_props=CollisionPropertiesCfg(),
+                    semantic_tags=[("class", name)],
+                )
+            )
+            positions[name] = pos
 
-                offset = pos - xform_263_pos
-
-                # number = name.split("_")[-1]
+        for name, attributes in usd_info["sites"].items():
+                pos = attributes["position"]
+                offset = np.array(pos) - np.array(positions[attributes["source"]])
                 objs[name] = SiteCfg(
-                    prim_path=f"{{ENV_REGEX_NS}}/Xform_{263}",
+                    prim_path=f"{{ENV_REGEX_NS}}/{attributes['source']}",
                     debug_vis=True,
-                    offset=offset
-                )
-            else:
-                transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-                transform = torch.tensor(transform)
-                pos, quat = misc_utils.GUI_matrix_to_pos_and_quat(transform)
-                # pos, quat = (0,0,0), (1,0,0,0)
-                objs[name] = RigidObjectCfg(
-                    prim_path=f"{{ENV_REGEX_NS}}/{name}",
-                    init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-                    spawn=usd_utils.CustomRigidUSDCfg(
-                        usd_path=usd_path,
-                        usd_sub_path=entry.GetPath().pathString,
-                        rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True if name == "Xform_263" else False),
-                        collision_props=CollisionPropertiesCfg(),
-                        semantic_tags=[("class", "obj")] if name == "Xform_266" else [],
-                    )
+                    offset=offset.tolist()
                 )
 
-                if name == "Xform_263":
-                    xform_263_pos = pos
 
-        
+
+        # site_pattern = r"^SiteXform_\d+$"
+        # xform_263_pos = None
+        # for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
+        #     name = entry.GetName()
+        #     if re.match(site_pattern, name):
+        #         # handle site
+        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+        #         transform = torch.tensor(transform)
+        #         pos, _ = misc_utils.GUI_matrix_to_pos_and_quat(transform)
+        #
+        #         offset = pos - xform_263_pos
+        #
+        #         # number = name.split("_")[-1]
+        #         objs[name] = SiteCfg(
+        #             prim_path=f"{{ENV_REGEX_NS}}/Xform_{263}",
+        #             debug_vis=True,
+        #             offset=offset
+        #         )
+        #     else:
+        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
+        #         transform = torch.tensor(transform)
+        #         pos, quat = misc_utils.GUI_matrix_to_pos_and_quat(transform)
+        #         # pos, quat = (0,0,0), (1,0,0,0)
+        #         objs[name] = RigidObjectCfg(
+        #             prim_path=f"{{ENV_REGEX_NS}}/{name}",
+        #             init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
+        #             spawn=usd_utils.CustomRigidUSDCfg(
+        #                 usd_path=usd_path,
+        #                 usd_sub_path=entry.GetPath().pathString,
+        #                 rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True if name == "Xform_263" else False),
+        #                 collision_props=CollisionPropertiesCfg(),
+        #                 semantic_tags=[("class", "obj")] if name == "Xform_266" else [],
+        #             )
+        #         )
+        #
+        #         if name == "Xform_263":
+        #             xform_263_pos = pos
+        #
+        # 
 
         for k, v in objs.items():
             setattr(self, k, v)
@@ -199,10 +231,10 @@ class ObservationsCfg:
         ee_position = ObsTerm(
             func=mdp.ee_pose,
         )
-        object_position = ObsTerm(
-            func=mdp.object_position_in_robot_root_frame,
-            params={"object_cfg": SceneEntityCfg("Xform_266")}
-        )
+        # object_position = ObsTerm(
+        #     func=mdp.object_position_in_robot_root_frame,
+        #     params={"object_cfg": SceneEntityCfg("Xform_266")}
+        # )
         # target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
 
         # actions = ObsTerm(func=mdp.last_action)
@@ -241,25 +273,25 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    ee_to_obj = RewTerm(
-        func=mdp.object_ee_distance,
-        params={
-            "std": 0.1,
-            "object_cfg": SceneEntityCfg("Xform_266")
-            },
-        weight=1.0
-    )
-
-    # in the future turn this into a distance to command goal, not object
-    obj_to_site = RewTerm(
-        func=mdp.object_to_object_distance,
-        params={
-            "std":0.3,
-            "object1_cfg": SceneEntityCfg("SiteXform_267"),
-            "object2_cfg": SceneEntityCfg("Xform_266"),
-        },
-        weight=2.0
-    )
+    # ee_to_obj = RewTerm(
+    #     func=mdp.object_ee_distance,
+    #     params={
+    #         "std": 0.1,
+    #         "object_cfg": SceneEntityCfg("Xform_266")
+    #         },
+    #     weight=1.0
+    # )
+    #
+    # # in the future turn this into a distance to command goal, not object
+    # obj_to_site = RewTerm(
+    #     func=mdp.object_to_object_distance,
+    #     params={
+    #         "std":0.3,
+    #         "object1_cfg": SceneEntityCfg("SiteXform_267"),
+    #         "object2_cfg": SceneEntityCfg("Xform_266"),
+    #     },
+    #     weight=2.0
+    # )
 
 @configclass
 class TerminationsCfg:
@@ -267,9 +299,9 @@ class TerminationsCfg:
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
-    object_dropping = DoneTerm(
-        func=mdp.root_height_below_minimum, params={"minimum_height": -0.3, "asset_cfg": SceneEntityCfg("Xform_266")}
-    )
+    # object_dropping = DoneTerm(
+    #     func=mdp.root_height_below_minimum, params={"minimum_height": -0.3, "asset_cfg": SceneEntityCfg("Xform_266")}
+    # )
 
 
 @configclass

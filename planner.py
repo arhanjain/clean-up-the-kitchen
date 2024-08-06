@@ -96,14 +96,14 @@ class MotionPlanner:
         # update obstacles and stuff
     def build_plan_from_template(self, plan_template):
         for action_type, object, location in plan_template:
-            rgb, seg, depth, meta_data = self.env.get_camera_data()
-            loaded_data = rgb, seg, depth, meta_data
+            # rgb, seg, depth, meta_data = self.env.get_camera_data()
+            # loaded_data = rgb, seg, depth, meta_data
             match action_type:
                 case "move":
                     # get grasp pose
                     success = torch.zeros(self.env.num_envs)
                     while not torch.all(success):
-                        grasp_pose, success = self.grasper.get_grasp(loaded_data, object)
+                        grasp_pose, success = self.grasper.get_grasp(self.env, object)
                     pregrasp_pose = self.grasper.get_pregrasp(grasp_pose, 0.1)
 
                     # go to pregrasp
@@ -115,17 +115,19 @@ class MotionPlanner:
                     else:
                         traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
                         yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
-
+                    
+                    
                     # go to grasp
-                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    traj, success = self.plan(joint_pos, joint_vel, joint_names, grasp_pose, mode="ee_pose")
-                    if not success:
-                        print("Failed to plan to grasp")
-                        yield None  
-                    else:
-                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                        # traj, traj_length = self.test_format(traj, maxpad=500)
-                        yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+                    yield torch.cat((grasp_pose, torch.ones(self.env.num_envs, 1)), dim=1).repeat(1, 20, 1).to(self.device)
+                    # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    # traj, success = self.plan(joint_pos, joint_vel, joint_names, grasp_pose, mode="ee_pose")
+                    # if not success:
+                    #     print("Failed to plan to grasp")
+                    #     yield None  
+                    # else:
+                    #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                    #     # traj, traj_length = self.test_format(traj, maxpad=500)
+                    #     yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
 
                     # grasp
                     ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]

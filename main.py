@@ -28,7 +28,6 @@ import torch
 import numpy as np
 import gymnasium as gym
 import customenv
-from grasp import load_and_predict, visualize, m2t2_grasp_to_pos_and_quat
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
@@ -47,17 +46,18 @@ from customenv import TestWrapper
 from planner import MotionPlanner
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 from omni.isaac.lab_tasks.utils.wrappers.sb3 import process_sb3_cfg, Sb3VecEnvWrapper
-from configuration import SB3Cfg, GeneralCfg, VideoCfg
+from configuration import Config
 from datetime import datetime
+import hydra
+import yaml
 
 
 def main():
-
     # Initialize dataclass configs
-    general_cfg = GeneralCfg().to_dict()
-    sb_cfg = SB3Cfg().to_dict()
-    viewer_cfg = VideoCfg().to_dict()
-    log_dir = f"{general_cfg['log_dir']}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+    cfg = Config()
+    with open(cfg.general.usd_info, "r") as file:
+        cfg.general.usd_path = yaml.safe_load(file)["usd_path"]
+    log_dir = f"{cfg.general.log_dir}/{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 
     # create environment configuration
     env_cfg = parse_env_cfg(
@@ -66,9 +66,10 @@ def main():
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
-    env_cfg.setup(general_cfg)
+    env_cfg.setup(cfg.general)
 
     # video wrapper stuff
+    viewer_cfg = cfg.video.to_dict()
     env_cfg.viewer.resolution = viewer_cfg.pop("viewer_resolution")
     env_cfg.viewer.eye = viewer_cfg.pop("viewer_eye")
     env_cfg.viewer.lookat = viewer_cfg.pop("viewer_lookat")
@@ -76,7 +77,7 @@ def main():
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
-    if viewer_cfg["enabled"]:  # record & save videos if enabled
+    if cfg.video.enabled:  # record & save videos if enabled
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
     env = TestWrapper(env)
 
@@ -90,17 +91,14 @@ def main():
     obs, info = env.reset()
 
     # Load and initialize helper classes
-    grasp_cfg = OmegaConf.load("./grasp_config.yaml")
-    grasp_model = M2T2.from_config(grasp_cfg.m2t2)
-    ckpt = torch.load(grasp_cfg.eval.checkpoint)
+    grasp_model = M2T2.from_config(cfg.grasp.m2t2)
+    ckpt = torch.load(cfg.grasp.eval.checkpoint)
     grasp_model.load_state_dict(ckpt["model"])
     grasp_model = grasp_model.cuda().eval()
 
-    grasper = Grasper(grasp_model, grasp_cfg)  # grasp prediction
-    planner = MotionPlanner(env, grasper)           # motion planning
+    grasper = Grasper(grasp_model, cfg.grasp, cfg.general.usd_path)     # grasp prediction
+    planner = MotionPlanner(env, grasper)                               # motion planning
 
-    pregrasp_pose = torch.tensor([[0.5, 0.5, 0.5, 1, 0, 0, 0]]).to(env.device)
-    grasp_pose = torch.tensor([[0.5, 0.5, 0.25, 1, 0, 0, 0]]).to(env.device)
     plan_template = [
         # action type, obj1, location
         ("move", "obj", "sink")
