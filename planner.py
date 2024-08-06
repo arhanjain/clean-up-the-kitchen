@@ -1,3 +1,4 @@
+from numpy import who
 import torch
 # CuRobo 
 from curobo.geom.sdf.world import CollisionCheckerType 
@@ -118,7 +119,8 @@ class MotionPlanner:
                     
                     
                     # go to grasp
-                    yield torch.cat((grasp_pose, torch.ones(self.env.num_envs, 1)), dim=1).repeat(1, 20, 1).to(self.device)
+                    action = torch.cat((grasp_pose, torch.ones(1,1)), dim=1).to(self.device)
+                    yield action.repeat(1, 30, 1)
                     # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
                     # traj, success = self.plan(joint_pos, joint_vel, joint_names, grasp_pose, mode="ee_pose")
                     # if not success:
@@ -135,17 +137,19 @@ class MotionPlanner:
                     tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
                     ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
                     close_gripper = -1 * torch.ones(self.env.num_envs, 1).to(self.device)
-                    yield torch.cat((ee_pose, close_gripper), dim=1).repeat(1, 10, 1)
+                    yield torch.cat((ee_pose, close_gripper), dim=1).repeat(1, 20, 1)
 
                     # go to pregrasp
-                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
-                    if not success:
-                        print("Failed to plan to pregrasp")
-                        yield None
-                    else:
-                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                        yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+                    action = torch.cat((pregrasp_pose, -torch.ones(1,1)), dim=1).to(self.device)
+                    yield action.repeat(1, 30, 1)
+                    # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    # traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
+                    # if not success:
+                    #     print("Failed to plan to pregrasp")
+                    #     yield None
+                    # else:
+                    #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                    #     yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
 
 
                 case _:
@@ -198,7 +202,10 @@ class MotionPlanner:
         if mode == "joint_pos":
             return traj, True
         elif mode == "ee_pose":
-            ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
+            try:
+                ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
+            except:
+                breakpoint()
             return ee_trajs, True
         else:
             raise ValueError("Invalid mode...")
@@ -215,6 +222,7 @@ class MotionPlanner:
                 padded_tensors.append(padded)
             ends = torch.tensor(lengths, dtype=torch.int32).to(self.device) - 1
             return torch.stack(padded_tensors), ends
+
     def pad_and_format(self, trajs):
             # pad out all
             trajs = [torch.cat((traj.ee_position, traj.ee_quaternion), dim=1) for traj in trajs]

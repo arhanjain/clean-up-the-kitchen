@@ -101,7 +101,7 @@ def main():
 
     plan_template = [
         # action type, obj1, location
-        ("move", "obj", "sink")
+        ("move", "bowl", "sink")
     ]
 
     # Simulate environment
@@ -118,85 +118,85 @@ def main():
     exit()
 
 
-    # Run everything in inference mode
-    joint_pos, joint_vel, joint_names = env.get_joint_info()
-    rgb, seg, depth, meta_data = env.get_camera_data()
-    # for m in meta_data:
-    #     m["object_label"] = "obj"
-    loaded_data = rgb, seg, depth, meta_data
-
-    # Load and predict grasp points
-    data, outputs = load_and_predict(loaded_data, grasp_model, grasp_cfg, obj_label="obj")
-    # Visualize through meshcat-viewer, how can we visualize the batches seperatly.
-    visualize(grasp_cfg, data[0], {k: v[0] for k, v in outputs.items()})
-
-    # grasp marker
-    marker_cfg = VisualizationMarkersCfg(
-     prim_path="/Visuals/graspviz",
-     markers={
-         "frame": sim_utils.UsdFileCfg(
-             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
-             scale=(0.5, 0.5, 0.5),
-         ),
-     }
-    )
-    marker = VisualizationMarkers(marker_cfg)
-
-    # Check if the first env has grasps, hopefully they have grasps TODO improve
-    if len(outputs["grasps"][0]) > 0:
-     backup = None
-     best_grasps = []
-     for i in range(env.num_envs):
-         # Get grasps per env in highest confidence order
-         if len(outputs["grasps"][i]) == 0:
-             # grasps = backup
-             best_grasps.append(backup)
-         else:
-             grasps = np.concatenate(outputs["grasps"][i], axis=0)
-             grasp_conf = np.concatenate(outputs["grasp_confidence"][i], axis=0)
-             sorted_grasp_idxs = np.argsort(grasp_conf)[::-1] # high to low confidence
-             grasps = grasps[sorted_grasp_idxs]
-             best_grasps.append(grasps[0])
-             if i == 0:
-                 backup = grasps[0]
-
-     # Get motion plan to grasp pose
-     best_grasps = torch.tensor(best_grasps)
-     pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
-     goal = torch.cat([pos, quat], dim=1)
-     plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
-     breakpoint()
-
-     if success:
-         with torch.inference_mode():
-             plan = planner.pad_and_format(plan)
-
-             # go to grasp pose
-             for pose in plan:
-                 gripper = torch.ones(env.num_envs, 1).to(0)
-                 action = torch.cat((pose, gripper), dim=1)
-                 env.step(action)
-                 final_pose = plan[-1]
-
-                 # marker.visualize(final_pose[:, :3], final_pose[:, 3:])
-             # close gripper
-             for _ in range(10):
-                 gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
-                 action = torch.cat((final_pose.clone(), gripper_close), dim=1)
-                 env.step(action)
-
-             # move gripper to demonstrate "pick"
-             for _ in range(50):
-                 gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
-                 newpose = torch.cat((final_pose[:, :3] + 0.2*torch.ones(env.num_envs,3).to(0), final_pose[:, 3:]), dim=1)
-                 action = torch.cat((newpose, gripper_close), dim=1)
-                 env.step(action)
-
-    else:
-     print("No successful grasp found")
-
-    env.reset() # To avoid inference mode resetting, comment this out.
-
+    # # Run everything in inference mode
+    # joint_pos, joint_vel, joint_names = env.get_joint_info()
+    # rgb, seg, depth, meta_data = env.get_camera_data()
+    # # for m in meta_data:
+    # #     m["object_label"] = "obj"
+    # loaded_data = rgb, seg, depth, meta_data
+    #
+    # # Load and predict grasp points
+    # data, outputs = load_and_predict(loaded_data, grasp_model, grasp_cfg, obj_label="obj")
+    # # Visualize through meshcat-viewer, how can we visualize the batches seperatly.
+    # visualize(grasp_cfg, data[0], {k: v[0] for k, v in outputs.items()})
+    #
+    # # grasp marker
+    # marker_cfg = VisualizationMarkersCfg(
+    #  prim_path="/Visuals/graspviz",
+    #  markers={
+    #      "frame": sim_utils.UsdFileCfg(
+    #          usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
+    #          scale=(0.5, 0.5, 0.5),
+    #      ),
+    #  }
+    # )
+    # marker = VisualizationMarkers(marker_cfg)
+    #
+    # # Check if the first env has grasps, hopefully they have grasps TODO improve
+    # if len(outputs["grasps"][0]) > 0:
+    #  backup = None
+    #  best_grasps = []
+    #  for i in range(env.num_envs):
+    #      # Get grasps per env in highest confidence order
+    #      if len(outputs["grasps"][i]) == 0:
+    #          # grasps = backup
+    #          best_grasps.append(backup)
+    #      else:
+    #          grasps = np.concatenate(outputs["grasps"][i], axis=0)
+    #          grasp_conf = np.concatenate(outputs["grasp_confidence"][i], axis=0)
+    #          sorted_grasp_idxs = np.argsort(grasp_conf)[::-1] # high to low confidence
+    #          grasps = grasps[sorted_grasp_idxs]
+    #          best_grasps.append(grasps[0])
+    #          if i == 0:
+    #              backup = grasps[0]
+    #
+    #  # Get motion plan to grasp pose
+    #  best_grasps = torch.tensor(best_grasps)
+    #  pos, quat = m2t2_grasp_to_pos_and_quat(best_grasps)
+    #  goal = torch.cat([pos, quat], dim=1)
+    #  plan, success = planner.plan(joint_pos, joint_vel, joint_names, goal, mode="ee_pose")
+    #  breakpoint()
+    #
+    #  if success:
+    #      with torch.inference_mode():
+    #          plan = planner.pad_and_format(plan)
+    #
+    #          # go to grasp pose
+    #          for pose in plan:
+    #              gripper = torch.ones(env.num_envs, 1).to(0)
+    #              action = torch.cat((pose, gripper), dim=1)
+    #              env.step(action)
+    #              final_pose = plan[-1]
+    #
+    #              # marker.visualize(final_pose[:, :3], final_pose[:, 3:])
+    #          # close gripper
+    #          for _ in range(10):
+    #              gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
+    #              action = torch.cat((final_pose.clone(), gripper_close), dim=1)
+    #              env.step(action)
+    #
+    #          # move gripper to demonstrate "pick"
+    #          for _ in range(50):
+    #              gripper_close = -1 * torch.ones(env.num_envs, 1).to(final_pose.device)
+    #              newpose = torch.cat((final_pose[:, :3] + 0.2*torch.ones(env.num_envs,3).to(0), final_pose[:, 3:]), dim=1)
+    #              action = torch.cat((newpose, gripper_close), dim=1)
+    #              env.step(action)
+    #
+    # else:
+    #  print("No successful grasp found")
+    #
+    # env.reset() # To avoid inference mode resetting, comment this out.
+    #
 
 
     # # post-process agent config
