@@ -1,3 +1,10 @@
+# Custom
+data/
+videos/
+logs/
+pyrightconfig.json
+pyproject.toml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -162,4 +169,3 @@ cython_debug/
 #.idea/
 
 
-data/

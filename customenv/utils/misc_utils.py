@@ -10,7 +10,7 @@ def pos_and_quat_to_matrix(pos, quat):
     num_envs = pos.shape[0]
 
     rot_mat = math.matrix_from_quat(quat)
-    pos = pos.unsqueeze(2)
+    pos = pos.view(-1, 3, 1)
 
     transformation = torch.cat((rot_mat, pos), dim=2).cpu()
 
@@ -19,4 +19,14 @@ def pos_and_quat_to_matrix(pos, quat):
 
     return transformation
 
+def GUI_matrix_to_pos_and_quat(matrix: torch.Tensor):
+    '''
+    Takes in a 4x4 matrix,
+    '''
+    pos = matrix[-1, :3]
+    temp = pos.clone()
+    pos[2] = temp[1]
+    pos[1] = -temp[2]
+    quat = math.quat_from_matrix(matrix[:3, :3])
+    return pos, quat
 
