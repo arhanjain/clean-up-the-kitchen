@@ -95,14 +95,22 @@ class Grasper:
         pos, quat = grasp_pose[:, :3], grasp_pose[:, 3:]
 
         # Normalize quaternions
-        norms = torch.norm(quat, dim=1, keepdim=True)
-        q = quat / norms
+        # norms = torch.norm(quat, dim=1, keepdim=True)
+        # q = quat / norms
+        q = quat / torch.norm(quat, dim=-1, keepdim=True)
 
         # Calculate direction vectors
-        direction = torch.empty((quat.shape[0], 3), device=quat.device)
-        direction[:, 0] = 2 * (q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3])
-        direction[:, 1] = 2 * (q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3])
-        direction[:, 2] = 1 - 2 * (q[:, 0]**2 + q[:, 1]**2)
+        # direction = torch.empty((quat.shape[0], 3), device=quat.device)
+        # direction[:, 0] = 2 * (q[:, 0] * q[:, 2] + q[:, 1] * q[:, 3])
+        # direction[:, 1] = 2 * (q[:, 1] * q[:, 2] - q[:, 0] * q[:, 3])
+        # direction[:, 2] = 1 - 2 * (q[:, 0]**2 + q[:, 1]**2)
+
+        w, x, y, z = q[..., 0], q[..., 1], q[..., 2], q[..., 3]
+        direction = torch.stack([
+            2 * (x * z + w * y),
+            2 * (y * z - w * x),
+            1 - 2 * (x**2 + y**2)
+        ], dim=-1)
 
         pregrasp = grasp_pose.clone()
         pregrasp[:, :3] -= offset * direction
@@ -111,7 +119,7 @@ class Grasper:
 
     def sample_grasps(self, outputs, num_grasps):
         '''
-        Samples num_grasps from the outputs of load_and_predict. Returns the
+        Weighted samples num_grasps from the outputs of load_and_predict. Returns the
         sampled grasps in the form of pos: (num_grasps, 3), quat: (num_grasps, 4)
         Parameters
         ----------
@@ -129,11 +137,15 @@ class Grasper:
             Whether the grasp prediction was successful, if at least one grasp was predicted
         '''
         all_grasps = outputs["grasps"][0]
+        all_conf = outputs["grasp_confidence"][0]
         if len(all_grasps) == 0:
             return (None, None), torch.zeros(num_grasps, dtype=torch.bool)
         all_grasps = torch.concatenate(all_grasps, dim=0)
-        indices = np.random.choice(all_grasps.shape[0], num_grasps, replace=True)
-        
+        all_conf = torch.concatenate(all_conf, dim=0)
+
+        prob_dist = torch.softmax(all_conf, dim=0)
+        indices = np.random.choice(all_grasps.shape[0], num_grasps, replace=True, p=prob_dist.numpy())
+
         selected_grasps = all_grasps[indices]
         pos, quat = self.m2t2_grasp_to_pos_and_quat(selected_grasps)
         return (pos, quat), torch.ones(num_grasps, dtype=torch.bool)
