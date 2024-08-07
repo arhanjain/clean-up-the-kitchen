@@ -1,5 +1,6 @@
 from numpy import who
 import torch
+import yaml
 # CuRobo 
 from curobo.geom.sdf.world import CollisionCheckerType 
 from curobo.geom.types import WorldConfig 
@@ -28,8 +29,9 @@ from curobo.wrap.reacher.motion_gen import (
 )
 
 from grasp import Grasper
+from openai import OpenAI
+import os
 
-    
 class MotionPlanner:
     def __init__(self, env, grasper: Grasper):
         usd_help = UsdHelper()
@@ -100,7 +102,7 @@ class MotionPlanner:
             # rgb, seg, depth, meta_data = self.env.get_camera_data()
             # loaded_data = rgb, seg, depth, meta_data
             match action_type:
-                case "move":
+                case "pick":
                     # get grasp pose
                     success = torch.zeros(self.env.num_envs)
                     while not torch.all(success):
@@ -241,3 +243,74 @@ class MotionPlanner:
     
     def fk(self, jp):
         return self.kin_model.get_state(jp)
+
+def generate_cleanup_tasks(scene_info):
+    """
+    Generates a list of tasks needed to clean up the kitchen based on the scene layout.
+
+    Args:
+    - scene_info (list): A list of objects in the scene.
+
+    Returns:
+    - str: Formatted string with tasks for cleaning up the kitchen.
+    """
+
+    prompt_template = """Objective: 
+        Given a scene layout, generate a list of tasks needed to clean up the kitchen using the "pick" action. Each task should be in the format of a (pick, object, location) tuple. 
+        Identify objects that should be picked up and specify their target location.
+
+        Task: Clean up the kitchen
+        Scene: {scene}
+
+        Examples:
+
+        1. Task: Clean up the kitchen
+        Scene: ['cup', 'table']
+        Answer: [('pick', 'cup', 'table')]
+
+        2. Task: Clean up the kitchen
+        Scene: ['plate', 'cabinet']
+        Answer: [('pick', 'plate', 'cabinet')]
+
+        3. Task: Clean up the kitchen
+        Scene: ['bowl', 'cup', 'table', 'cabinet']
+        Answer: [('pick', 'bowl', 'cabinet'), ('pick', 'cup', 'cabinet')]
+
+        4. Task: Clean up the kitchen
+        Scene: ['cup', 'sink', 'cabinet']
+        Answer: [('pick', 'cup', 'sink')]
+
+        5. Task: Clean up the kitchen
+        Scene: ['bowl', 'sink', 'cup', 'plate', 'cabinet', 'table']
+        Answer: [('pick', 'bowl', 'sink'), ('pick', 'cup', 'cabinet'), ('pick', 'plate', 'cabinet')]
+        Generate ONLY the answer for the question above (e.g, [('pick', 'bowl', 'sink')]):
+        """
+    
+    # In the future we will need to find a better way to do this.
+    target_location = 'sink'
+    
+    answer = []
+    for obj in scene_info:
+        if obj != target_location:
+            answer.append((f"pick", obj, target_location))
+    formatted_prompt = prompt_template.format(scene=scene_info, answer=answer)
+    return formatted_prompt
+
+def extract_objects_and_sites_info(usd_info_path):
+    with open(usd_info_path) as f:
+        usd_info = yaml.safe_load(f)
+    scene_info = []
+    for obj_name, _ in usd_info["xforms"].items():
+        scene_info.append(obj_name)
+    return scene_info
+
+def get_plan(prompt):
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+    )
+    return response.choices[0].message.content

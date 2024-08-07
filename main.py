@@ -33,7 +33,7 @@ from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 
-from planner import MotionPlanner
+from planner import MotionPlanner, extract_objects_and_sites_info, generate_cleanup_tasks, get_plan
 from grasp import Grasper
 from customenv import TestWrapper
 from omegaconf import OmegaConf
@@ -50,7 +50,6 @@ from configuration import Config
 from datetime import datetime
 import hydra
 import yaml
-
 
 def main():
     # Initialize dataclass configs
@@ -82,13 +81,13 @@ def main():
     env = TestWrapper(env)
 
     # Reset environment
-    obs, info = env.reset()
+    env.reset()
 
     # Temp fix to image rendering, so that it captures RGB correctly before entering.
     for _ in range(10):
         action = torch.tensor(env.action_space.sample()).to(env.device)
         env.step(action)
-    obs, info = env.reset()
+    env.reset()
 
     # Load and initialize helper classes
     grasp_model = M2T2.from_config(cfg.grasp.m2t2)
@@ -99,10 +98,13 @@ def main():
     grasper = Grasper(grasp_model, cfg.grasp, cfg.general.usd_path)     # grasp prediction
     planner = MotionPlanner(env, grasper)                               # motion planning
 
-    plan_template = [
-        # action type, obj1, location
-        ("move", "bowl", "sink")
-    ]
+    # Get the scene info and then plan
+    scene_info = extract_objects_and_sites_info(cfg.general.usd_info)
+    prompt = generate_cleanup_tasks(scene_info)
+    plan_template = get_plan(prompt)
+    print('plan template:', plan_template)
+    plan_template = eval(plan_template)
+    
 
     # Simulate environment
     while simulation_app.is_running():
@@ -223,8 +225,6 @@ def main():
 
     # close the simulator
     #     # Close the simulator
-
-
 
 if __name__ == "__main__":
     # run the main function
