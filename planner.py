@@ -102,11 +102,11 @@ class MotionPlanner:
             # rgb, seg, depth, meta_data = self.env.get_camera_data()
             # loaded_data = rgb, seg, depth, meta_data
             match action_type:
-                case "pick":
-                    # get grasp pose
+                case "move":
+                    # # get grasp pose
                     success = torch.zeros(self.env.num_envs)
                     while not torch.all(success):
-                        grasp_pose, success = self.grasper.get_grasp(self.env, object)
+                        grasp_pose, success = self.grasper.get_action(self.env, object, 'grasps')
                     pregrasp_pose = self.grasper.get_pregrasp(grasp_pose, 0.1)
 
                     # go to pregrasp
@@ -144,14 +144,40 @@ class MotionPlanner:
                     # go to pregrasp
                     action = torch.cat((pregrasp_pose, -torch.ones(1,1)), dim=1).to(self.device)
                     yield action.repeat(1, 30, 1)
+                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
+                    if not success:
+                        print("Failed to plan to pregrasp")
+                        yield None
+                    else:
+                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                        yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+
+                    # breakpoint()
+                    # # Get place pose
+                    # place_success = torch.zeros(self.env.num_envs)
+                    # while not torch.all(place_success):
+                    #     place_pose, place_success = self.grasper.get_action(self.env, location, 'placements')
                     # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    # traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
-                    # if not success:
-                    #     print("Failed to plan to pregrasp")
+                    
+                    # traj, place_success = self.plan(joint_pos, joint_vel, joint_names, place_pose, mode="ee_pose")
+                    # if not place_success:
+                    #     print("Failed to plan to placement")
                     #     yield None
                     # else:
                     #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                    #     yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+                    #     yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+
+
+                    # action = torch.cat((place_pose, torch.ones(1,1)), dim=1).to(self.device)
+                    # yield action.repeat(1, 30, 1)
+
+                    # ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]
+                    # tcp_rest_position = ee_frame_sensor.data.target_pos_source[..., 0, :].clone()
+                    # tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
+                    # ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
+                    # open_gripper = torch.ones(self.env.num_envs, 1).to(self.device)
+                    # yield torch.cat((ee_pose, open_gripper), dim=1).repeat(1, 20, 1)
 
 
                 case _:
@@ -256,7 +282,7 @@ def generate_cleanup_tasks(scene_info):
     """
 
     prompt_template = """Objective: 
-        Given a scene layout, generate a list of tasks needed to clean up the kitchen using the "pick" action. Each task should be in the format of a (pick, object, location) tuple. 
+        Given a scene layout, generate a list of tasks needed to clean up the kitchen using the "move" action. Each task should be in the format of a (move, object, location) tuple. 
         Identify objects that should be picked up and specify their target location.
 
         Task: Clean up the kitchen
@@ -266,24 +292,24 @@ def generate_cleanup_tasks(scene_info):
 
         1. Task: Clean up the kitchen
         Scene: ['cup', 'table']
-        Answer: [('pick', 'cup', 'table')]
+        Answer: [('move', 'cup', 'table')]
 
         2. Task: Clean up the kitchen
         Scene: ['plate', 'cabinet']
-        Answer: [('pick', 'plate', 'cabinet')]
+        Answer: [('move', 'plate', 'cabinet')]
 
         3. Task: Clean up the kitchen
         Scene: ['bowl', 'cup', 'table', 'cabinet']
-        Answer: [('pick', 'bowl', 'cabinet'), ('pick', 'cup', 'cabinet')]
+        Answer: [('move', 'bowl', 'cabinet'), ('move', 'cup', 'cabinet')]
 
         4. Task: Clean up the kitchen
         Scene: ['cup', 'sink', 'cabinet']
-        Answer: [('pick', 'cup', 'sink')]
+        Answer: [('move', 'cup', 'sink')]
 
         5. Task: Clean up the kitchen
         Scene: ['bowl', 'sink', 'cup', 'plate', 'cabinet', 'table']
-        Answer: [('pick', 'bowl', 'sink'), ('pick', 'cup', 'cabinet'), ('pick', 'plate', 'cabinet')]
-        Generate ONLY the answer for the question above (e.g, [('pick', 'bowl', 'sink')]):
+        Answer: [('move', 'bowl', 'sink'), ('move', 'cup', 'cabinet'), ('move', 'plate', 'cabinet')]
+        Generate ONLY the answer for the question above (e.g, [('move', 'bowl', 'sink')]):
         """
     
     # In the future we will need to find a better way to do this.
