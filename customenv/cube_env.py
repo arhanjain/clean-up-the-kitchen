@@ -4,7 +4,6 @@ import torch
 import re
 import numpy as np
 import yaml
-from configuration import GeneralCfg
 from omni.isaac.lab.markers.visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 import omni.isaac.lab.utils.math as math
@@ -98,27 +97,23 @@ class CubeSceneCfg(InteractiveSceneCfg):
         )
 
     
-    def setup(self, cfg: GeneralCfg):
+    def setup(self, usd_info):
         # parse and add USD
         objs = {}
-        with open(cfg.usd_info) as f:
-            usd_info = yaml.safe_load(f)
-        usd_path = usd_info["usd_path"]
-        usd_stage = Usd.Stage.Open(usd_path)
         
         marker_cfg = FRAME_MARKER_CFG.copy()
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
 
         positions = {}
-        for name, attributes in usd_info["xforms"].items():
+        for name, attributes in usd_info.xforms.items():
             pos, quat = attributes["position"], attributes["quaternion"]
             usd_sub_path = attributes["subpath"]
             objs[name] = RigidObjectCfg(
                 prim_path=f"{{ENV_REGEX_NS}}/{name}",
                 init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
                 spawn=usd_utils.CustomRigidUSDCfg(
-                    usd_path=usd_path,
+                    usd_path=usd_info.usd_path,
                     usd_sub_path=usd_sub_path,
                     rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=attributes["disable_gravity"]),
                     collision_props=CollisionPropertiesCfg(),
@@ -349,7 +344,7 @@ class CubeEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
 
-    def setup(self, cfg):
+    def setup(self, usd_info):
         for _, attr in self.__dict__.items():
             if hasattr(attr, 'setup') and callable(getattr(attr, 'setup')):
-                attr.setup(cfg)
+                attr.setup(usd_info)

@@ -8,7 +8,6 @@ import re
 import pickle
 import torch
 
-from configuration import Config, GraspConfig
 from m2t2.dataset_utils import sample_points, depth_to_xyz, normalize_rgb
 from m2t2.dataset import collate
 from m2t2.m2t2 import M2T2
@@ -22,15 +21,30 @@ from pxr import Usd
 import omni.isaac.lab.utils.math as math
 
 class Grasper:
-    def __init__(self, model, cfg: GraspConfig, usd_path = None) -> None:
-        '''
-        Initializes the Grasper object with the model and configuration.
-        Takes in option USD path for synthetic grasping if enabled.
-        '''
-        self.model = model
-        self.cfg = cfg
-        self.usd_path = usd_path
-        self.synthetic_pcd = cfg.data.synthetic_pcd
+    '''
+    Predicts grasps and placement poses for objects in the environment.
+    Supports simulated and real data. 
+
+    Parameters
+    ----------
+    grasp_cfg: OmegaConf
+        The configuration for the grasp prediction system.
+    usd_path: str
+        The path to the USD file containing the environment.
+    device: int
+        The device to run the model on. Preferable same GPU as the environment.
+
+    '''
+    def __init__(self, grasp_cfg, usd_path=None, device=0) -> None:
+        # Load Model
+        self._model = M2T2.from_config(grasp_cfg.m2t2)
+        ckpt = torch.load(grasp_cfg.eval.checkpoint)
+        self._model.load_state_dict(ckpt["model"])
+        self._model = self._model.to(device).eval()
+
+        self._usd_path = usd_path
+        self._synthetic_pcd = grasp_cfg.data.synthetic_pcd
+        self._cfg = grasp_cfg
 
     def get_grasp(self, env, object_class, viz=True):
         '''
@@ -49,14 +63,14 @@ class Grasper:
 
         Returns
         -------
-        pose: torch.tensor(float) shape: (M, 7)
+        pose: torch.tensor((M, 7, dtype=float)
             The position and quaternion of the best grasp pose for each environment
-        success: torch.tensor(bool) shape: (N,)
+        success: torch.tensor((N,), dtype=bool)
             Whether the grasp prediction was successful for each environment
         '''
         
         goal_pos, goal_quat, success = None, None, None
-        if self.synthetic_pcd:
+        if self._synthetic_pcd:
             # Samples synthetic pcd points from mesh and samples from the same set of predicted grasps (more efficient!)
             data, outputs = self.load_and_predict_synthetic()
             (goal_pos, goal_quat), success = self.sample_grasps(outputs, env.unwrapped.num_envs)
@@ -64,7 +78,7 @@ class Grasper:
             # Gets camera observed PCDs and takes highest confidence grasp per environment
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
-            data, outputs = self.load_and_predict_real(data, self.model, self.cfg, obj_label=object_class)
+            data, outputs = self.load_and_predict_real(data, self._model, self._cfg, obj_label=object_class)
             (goal_pos, goal_quat), success = self.choose_grasp(outputs)
 
         if viz:
@@ -154,7 +168,7 @@ class Grasper:
     def load_and_predict_synthetic(self,):
 
         # Load and prepare synthetic point clouds
-        usd_stage = Usd.Stage.Open(self.usd_path)
+        usd_stage = Usd.Stage.Open(self._usd_path)
         geometries = []
         pattern = re.compile(r'/World/Xform_.*/Object_Geometry$')
         for prim in usd_stage.TraverseAll():
@@ -220,19 +234,11 @@ class Grasper:
             'placement_contacts': []
         }
 
-        # TODO REMOVE THIS and have it take the model as input
-        # cfg = OmegaConf.load("./grasp_config.yaml")
-        # model = M2T2.from_config(cfg.m2t2)
-        # ckpt = torch.load(cfg.eval.checkpoint)
-        # model.load_state_dict(ckpt["model"])
-        # model = model.cuda().eval()
-        
-
         data_batch = collate(data)
         to_gpu(data_batch)
 
         with torch.no_grad():
-            model_ouputs = self.model.infer(data_batch, self.cfg.eval)
+            model_ouputs = self._model.infer(data_batch, self._cfg.eval)
         to_cpu(model_ouputs)
         for key in outputs:
             if 'place' in key and len(outputs[key]) > 0:
@@ -451,7 +457,7 @@ class Grasper:
         xyz = data['points'].cpu().numpy()
         cam_pose = data['cam_pose'].cpu().double().numpy()
         make_frame(vis, 'camera', T=cam_pose)
-        if not self.cfg.eval.world_coord:
+        if not self._cfg.eval.world_coord:
             xyz = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
         visualize_pointcloud(vis, 'scene', xyz, rgb, size=0.005)
         if data['task'] == 'pick':
@@ -472,7 +478,7 @@ class Grasper:
                     contacts.numpy(), conf_colors, size=0.01
                 )
                 grasps = grasps.numpy()
-                if not self.cfg.eval.world_coord:
+                if not self._cfg.eval.world_coord:
                     grasps = cam_pose @ grasps
                 
                 for j, grasp in enumerate(grasps):
