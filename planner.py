@@ -154,30 +154,30 @@ class MotionPlanner:
                         yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
 
                     # breakpoint()
-                    # # Get place pose
-                    # place_success = torch.zeros(self.env.num_envs)
-                    # while not torch.all(place_success):
-                    #     place_pose, place_success = self.grasper.get_action(self.env, location, 'placements')
-                    # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
+                    # Get place pose
+                    place_success = torch.zeros(self.env.num_envs)
+                    while not torch.all(place_success):
+                        place_pose, place_success = self.grasper.get_action(self.env, location, 'placements')
+                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
                     
-                    # traj, place_success = self.plan(joint_pos, joint_vel, joint_names, place_pose, mode="ee_pose")
-                    # if not place_success:
-                    #     print("Failed to plan to placement")
-                    #     yield None
-                    # else:
-                    #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                    #     yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+                    traj, place_success = self.plan(joint_pos, joint_vel, joint_names, place_pose, mode="ee_pose")
+                    if not place_success:
+                        print("Failed to plan to placement")
+                        yield None
+                    else:
+                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
+                        yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
 
 
-                    # action = torch.cat((place_pose, torch.ones(1,1)), dim=1).to(self.device)
-                    # yield action.repeat(1, 30, 1)
+                    action = torch.cat((place_pose, torch.ones(1,1)), dim=1).to(self.device)
+                    yield action.repeat(1, 30, 1)
 
-                    # ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]
-                    # tcp_rest_position = ee_frame_sensor.data.target_pos_source[..., 0, :].clone()
-                    # tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
-                    # ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-                    # open_gripper = torch.ones(self.env.num_envs, 1).to(self.device)
-                    # yield torch.cat((ee_pose, open_gripper), dim=1).repeat(1, 20, 1)
+                    ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]
+                    tcp_rest_position = ee_frame_sensor.data.target_pos_source[..., 0, :].clone()
+                    tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
+                    ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
+                    open_gripper = torch.ones(self.env.num_envs, 1).to(self.device)
+                    yield torch.cat((ee_pose, open_gripper), dim=1).repeat(1, 20, 1)
 
 
                 case _:

@@ -58,21 +58,19 @@ class Grasper:
         '''
         
         goal_pos, goal_quat, success = None, None, None
-        if self.synthetic_pcd:
-            # Samples synthetic PCD points from the mesh and selects the best action (grasp or place) 
-            # from the same set of predicted poses (more efficient!)
-            if action == 'grasps':
-                data, outputs = self.load_and_predict_synthetic('grasps')
-            else: 
-                data, outputs = self.load_and_predict_synthetic('placements')
-            (goal_pos, goal_quat), success = self.sample_actions(outputs, env.unwrapped.num_envs, action)
-        else: 
-            # TODO: Extend this section to handle 'placements' functionality
-            # Obtains camera-observed PCDs and selects the highest confidence grasp per environment
+        # TODO: Extend this section to handle 'placements' functionality
+        # Obtains camera-observed PCDs and selects the highest confidence grasp per environment
+        if action == 'placements':
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
             data, outputs = self.load_and_predict_real(data, self.model, self.cfg, obj_label=object_class)
             (goal_pos, goal_quat), success = self.choose_action(outputs, action)
+        if self.synthetic_pcd and action == 'grasps':
+            # Samples synthetic PCD points from the mesh and selects the best action (grasp or place) 
+            # from the same set of predicted poses (more efficient!)
+            data, outputs = self.load_and_predict_synthetic('grasps')
+            (goal_pos, goal_quat), success = self.sample_actions(outputs, env.unwrapped.num_envs, action)
+
 
         if viz:
             self.visualize(data[0], {k: v[0] for k, v in outputs.items()})
@@ -359,11 +357,11 @@ class Grasper:
                 cfg.data.world_coord, cfg.data.jitter_scale,
                 cfg.data.grid_resolution, cfg.eval.surface_range
             )
-
-            if 'object_label' in d:
-                d['task'] = 'place'
-            else:
-                d['task'] = 'pick'
+            d['task'] = 'place'
+            # if 'object_label' in d:
+            #     d['task'] = 'place'
+            # else:
+            #     d['task'] = 'pick'
 
             inputs, xyz, seg = d['inputs'], d['points'], d['seg']
             obj_inputs = d['object_inputs']
@@ -496,6 +494,7 @@ class Grasper:
             xyz = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
         visualize_pointcloud(vis, 'scene', xyz, rgb, size=0.005)
         if data['task'] == 'pick':
+            print("Visualizing picking")
             # print(outputs['grasps'])
             for i, (grasps, conf, contacts, color) in enumerate(zip(
                 outputs['grasps'],
@@ -522,6 +521,7 @@ class Grasper:
                         grasp, color, linewidth=0.2
                     )
         elif data['task'] == 'place':
+            print("Visualizing placement")
             ee_pose = data['ee_pose'].double().numpy()
             make_frame(vis, 'ee', T=ee_pose)
             obj_xyz_ee, obj_rgb = data['object_inputs'].split([3, 3], dim=1)
