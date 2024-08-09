@@ -58,12 +58,13 @@ class Grasper:
         '''
         
         goal_pos, goal_quat, success = None, None, None
-        # TODO: Extend this section to handle 'placements' functionality
         # Obtains camera-observed PCDs and selects the highest confidence grasp per environment
         if action == 'placements':
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
             data, outputs = self.load_and_predict_real(data, self.model, self.cfg, obj_label=object_class)
+            # data, outputs = self.load_and_predict_synthetic('placements')
+            # (goal_pos, goal_quat), success = self.sample_actions(outputs, env.unwrapped.num_envs, action)
             (goal_pos, goal_quat), success = self.choose_action(outputs, action)
         if self.synthetic_pcd and action == 'grasps':
             # Samples synthetic PCD points from the mesh and selects the best action (grasp or place) 
@@ -220,7 +221,7 @@ class Grasper:
         inputs, xyz, seg = d['inputs'], d['points'], d['seg']
         obj_inputs = d['object_inputs']
 
-        pt_idx = sample_points(xyz, 10_000)
+        pt_idx = sample_points(xyz, 25_000)
         d['inputs'] = inputs[pt_idx]
         d['points'] = xyz[pt_idx]
         d['seg'] = seg[pt_idx]

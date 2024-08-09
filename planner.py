@@ -155,9 +155,9 @@ class MotionPlanner:
 
                     # breakpoint()
                     # Get place pose
-                    place_success = torch.zeros(self.env.num_envs)
-                    while not torch.all(place_success):
-                        place_pose, place_success = self.grasper.get_action(self.env, location, 'placements')
+                    # place_success = torch.zeros(self.env.num_envs) # I think this resets the environment after placing
+                    # while not torch.all(place_success):
+                    place_pose, place_success = self.grasper.get_action(self.env, object, 'placements')
                     joint_pos, joint_vel, joint_names = self.env.get_joint_info()
                     
                     traj, place_success = self.plan(joint_pos, joint_vel, joint_names, place_pose, mode="ee_pose")
