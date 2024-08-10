@@ -60,7 +60,7 @@ class Orchestrator:
             for step in action.build(self.env):
                 yield step
 
-def generate_cleanup_tasks(scene_info):
+    def generate_cleanup_tasks(scene_info):
         """
         Generates a list of tasks needed to clean up the kitchen based on the scene layout.
 
