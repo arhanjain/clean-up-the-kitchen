@@ -1,4 +1,4 @@
-usd_info_path: "./data/weirdlab_xform_mapping.yml"
+usd_info_path: "./data/bowl2sink_xform_mapping.yml"
 log_dir: "./logs"
 
 sb3:
@@ -54,6 +54,8 @@ grasp:
     robot_prob: 1.0
     offset_bins: [0, 0.00794435329, 0.0158887021, 0.0238330509, 0.0317773996, 0.0397217484, 0.0476660972, 0.055610446, 0.0635547948, 0.0714991435, 0.08]
     synthetic_pcd: false
+    num_sample_points: 25_000
+    num_sample_obj_points: 10_000
 
   m2t2:
     scene_encoder:
@@ -151,7 +153,7 @@ grasp:
 
   eval:
     data_dir: ''
-    checkpoint: '/home/arhan/Downloads/m2t2.pth'
+    checkpoint: '/home/jacob/projects/clean-up-the-kitchen/M2T2/m2t2.pth'
     mask_thresh: 0.4
     object_thresh: 0.4
     num_runs: 1
