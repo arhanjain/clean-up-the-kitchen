@@ -8,7 +8,6 @@ import re
 import pickle
 import torch
 
-from configuration import Config, GraspConfig
 from m2t2.dataset_utils import sample_points, depth_to_xyz, normalize_rgb
 from m2t2.dataset import collate
 from m2t2.m2t2 import M2T2
@@ -22,20 +21,35 @@ from pxr import Usd
 import omni.isaac.lab.utils.math as math
 
 class Grasper:
-    def __init__(self, model, cfg: GraspConfig, usd_path = None) -> None:
-        '''
-        Initializes the Grasper object with the model and configuration.
-        Takes in option USD path for synthetic grasping if enabled.
-        '''
-        self.model = model
-        self.cfg = cfg
-        self.usd_path = usd_path
-        self.synthetic_pcd = cfg.data.synthetic_pcd
+    '''
+    Predicts grasps and placement poses for objects in the environment.
+    Supports simulated and real data. 
 
-    def get_action(self, env, object_class, action, viz=True):
+    Parameters
+    ----------
+    grasp_cfg: OmegaConf
+        The configuration for the grasp prediction system.
+    usd_path: str
+        The path to the USD file containing the environment.
+    device: int
+        The device to run the model on. Preferable same GPU as the environment.
+
+    '''
+    def __init__(self, grasp_cfg, usd_path=None, device=0) -> None:
+        # Load Model
+        self._model = M2T2.from_config(grasp_cfg.m2t2)
+        ckpt = torch.load(grasp_cfg.eval.checkpoint)
+        self._model.load_state_dict(ckpt["model"])
+        self._model = self._model.to(device).eval()
+
+        self._usd_path = usd_path
+        self._synthetic_pcd = grasp_cfg.data.synthetic_pcd
+        self._cfg = grasp_cfg
+
+    def get_grasp(self, env, object_class, viz=True):
         '''
-        Returns the best grasp or place pose on the specified object for each environment.
-        Given N environments, only M may be successful. The returned pose tensor
+        Returns best grasp pose on specified object for each environment.
+        Given N environments, only M may be successful. Returned grasp tensor
         will be of shape M.
 
         Parameters
@@ -43,44 +57,38 @@ class Grasper:
         env: ManagerBasedRLEnv (with possible wrappers)
             The environment.
         object_class: str
-            The class of object to interact with, used in semantic segmentation.
-        action: str
-            The type of action to perform, either 'grasps' or 'placements'.
+            The class of object to grasp, used in semantic segmentation
         viz: bool
-            Whether to visualize the scene.
+            Whether to visualize the scene
 
         Returns
         -------
-        pose: torch.tensor(float) shape: (M, 7)
-            The position and quaternion of the best pose (grasp or place) for each environment.
-        success: torch.tensor(bool) shape: (N,)
-            Whether the action prediction was successful for each environment.
+        pose: torch.tensor((M, 7, dtype=float)
+            The position and quaternion of the best grasp pose for each environment
+        success: torch.tensor((N,), dtype=bool)
+            Whether the grasp prediction was successful for each environment
         '''
         
         goal_pos, goal_quat, success = None, None, None
-        # Obtains camera-observed PCDs and selects the highest confidence grasp per environment
-        if action == 'placements':
+        if self._synthetic_pcd:
+            # Samples synthetic pcd points from mesh and samples from the same set of predicted grasps (more efficient!)
+            data, outputs = self.load_and_predict_synthetic()
+            (goal_pos, goal_quat), success = self.sample_grasps(outputs, env.unwrapped.num_envs)
+        else:
+            # Gets camera observed PCDs and takes highest confidence grasp per environment
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
-            data, outputs = self.load_and_predict_real(data, self.model, self.cfg, obj_label=object_class)
-            # data, outputs = self.load_and_predict_synthetic('placements')
-            # (goal_pos, goal_quat), success = self.sample_actions(outputs, env.unwrapped.num_envs, action)
-            (goal_pos, goal_quat), success = self.choose_action(outputs, action)
-        if self.synthetic_pcd and action == 'grasps':
-            # Samples synthetic PCD points from the mesh and selects the best action (grasp or place) 
-            # from the same set of predicted poses (more efficient!)
-            data, outputs = self.load_and_predict_synthetic('grasps')
-            (goal_pos, goal_quat), success = self.sample_actions(outputs, env.unwrapped.num_envs, action)
-
+            data, outputs = self.load_and_predict_real(data, self._model, self._cfg, obj_label=object_class)
+            (goal_pos, goal_quat), success = self.choose_grasp(outputs)
 
         if viz:
             self.visualize(data[0], {k: v[0] for k, v in outputs.items()})
 
+
         if not torch.all(success):
             return (None, None), success
 
-        return torch.cat([goal_pos, goal_quat], dim=1), success
-
+        return torch.cat([goal_pos,goal_quat], dim=1), success
 
     @staticmethod
     def get_pregrasp(grasp_pose, offset):
@@ -123,54 +131,44 @@ class Grasper:
 
         return pregrasp
 
-    def sample_actions(self, outputs, num_actions, action):
+    def sample_grasps(self, outputs, num_grasps):
         '''
-        Weighted samples `num_actions` from the outputs of `load_and_predict`. Returns the
-        sampled actions (either grasps or placements) in the form of:
-        - pos: (num_actions, 3)
-        - quat: (num_actions, 4)
-
+        Weighted samples num_grasps from the outputs of load_and_predict. Returns the
+        sampled grasps in the form of pos: (num_grasps, 3), quat: (num_grasps, 4)
         Parameters
         ----------
         outputs: dict
-            The outputs from `load_and_predict`, containing action data and confidence scores.
-        num_actions: int
-            The number of actions (grasps or placements) to sample.
-        action: str
-            The type of action to perform, either 'grasps' or 'placements'.
-
+            The outputs of load_and_predict
+        num_grasps: int
+            The number of grasps to sample
         Returns
         -------
-        pos: torch.tensor(float) shape: (num_actions, 3)
-            The positions of the sampled actions.
-        quat: torch.tensor(float) shape: (num_actions, 4)
-            The quaternions of the sampled actions.
-        success: torch.tensor(bool) shape: (num_actions,)
-            A tensor indicating successful action predictions for each sampled action.
+        pos: torch.tensor(float) shape: (num_grasps, 3)
+            The position of the sampled grasps
+        quat: torch.tensor(float) shape: (num_grasps, 4)
+            The quaternion of the sampled grasps
+        success: bool
+            Whether the grasp prediction was successful, if at least one grasp was predicted
         '''
-        if action == 'grasps':
-            all_actions = outputs["grasps"][0]
-            all_conf = outputs["grasp_confidence"][0]
-        else:
-            all_actions = outputs['placements'][0]
-            all_conf = outputs["placement_confidence"][0]
-        if len(all_actions) == 0:
-            return (None, None), torch.zeros(num_actions, dtype=torch.bool)
-        all_actions = torch.concatenate(all_actions, dim=0)
+        all_grasps = outputs["grasps"][0]
+        all_conf = outputs["grasp_confidence"][0]
+        if len(all_grasps) == 0:
+            return (None, None), torch.zeros(num_grasps, dtype=torch.bool)
+        all_grasps = torch.concatenate(all_grasps, dim=0)
         all_conf = torch.concatenate(all_conf, dim=0)
 
         prob_dist = torch.softmax(all_conf, dim=0)
-        indices = np.random.choice(all_actions.shape[0], num_actions, replace=True, p=prob_dist.numpy())
+        indices = np.random.choice(all_grasps.shape[0], num_grasps, replace=True, p=prob_dist.numpy())
 
-        selected_actions = all_actions[indices]
-        pos, quat = self.m2t2_grasp_to_pos_and_quat(selected_actions)
-        return (pos, quat), torch.ones(num_actions, dtype=torch.bool)
+        selected_grasps = all_grasps[indices]
+        pos, quat = self.m2t2_grasp_to_pos_and_quat(selected_grasps)
+        return (pos, quat), torch.ones(num_grasps, dtype=torch.bool)
         
 
-    def load_and_predict_synthetic(self, action):
+    def load_and_predict_synthetic(self,):
 
         # Load and prepare synthetic point clouds
-        usd_stage = Usd.Stage.Open(self.usd_path)
+        usd_stage = Usd.Stage.Open(self._usd_path)
         geometries = []
         pattern = re.compile(r'/World/Xform_.*/Object_Geometry$')
         for prim in usd_stage.TraverseAll():
@@ -213,15 +211,13 @@ class Grasper:
             'object_center': torch.zeros(3)
         })
 
-        if action == 'grasps':
-            d['task'] = 'pick'
-        else:
-            d['task'] = 'place'
+
+        d['task'] = 'pick'
 
         inputs, xyz, seg = d['inputs'], d['points'], d['seg']
         obj_inputs = d['object_inputs']
 
-        pt_idx = sample_points(xyz, 25_000)
+        pt_idx = sample_points(xyz, 10_000)
         d['inputs'] = inputs[pt_idx]
         d['points'] = xyz[pt_idx]
         d['seg'] = seg[pt_idx]
@@ -238,22 +234,14 @@ class Grasper:
             'placement_contacts': []
         }
 
-        # TODO REMOVE THIS and have it take the model as input
-        # cfg = OmegaConf.load("./grasp_config.yaml")
-        # model = M2T2.from_config(cfg.m2t2)
-        # ckpt = torch.load(cfg.eval.checkpoint)
-        # model.load_state_dict(ckpt["model"])
-        # model = model.cuda().eval()
-        
-
         data_batch = collate(data)
         to_gpu(data_batch)
 
         with torch.no_grad():
-            model_ouputs = self.model.infer(data_batch, self.cfg.eval)
+            model_ouputs = self._model.infer(data_batch, self._cfg.eval)
         to_cpu(model_ouputs)
         for key in outputs:
-            if 'placements' in key and len(outputs[key]) > 0:
+            if 'place' in key and len(outputs[key]) > 0:
                 outputs[key] = [
                     torch.cat([prev, cur])
                     for prev, cur in zip(outputs[key], model_ouputs[key][0])
@@ -358,11 +346,11 @@ class Grasper:
                 cfg.data.world_coord, cfg.data.jitter_scale,
                 cfg.data.grid_resolution, cfg.eval.surface_range
             )
-            d['task'] = 'place'
-            # if 'object_label' in d:
-            #     d['task'] = 'place'
-            # else:
-            #     d['task'] = 'pick'
+
+            if 'object_label' in d:
+                d['task'] = 'place'
+            else:
+                d['task'] = 'pick'
 
             inputs, xyz, seg = d['inputs'], d['points'], d['seg']
             obj_inputs = d['object_inputs']
@@ -405,56 +393,34 @@ class Grasper:
         # data['object_inputs'] = obj_inputs
         return data, outputs
 
-    def choose_action(self, outputs, action):
+    def choose_grasp(self, outputs):
         '''
-        Weighted sampling of `num_actions` from the outputs generated by `load_and_predict`.
-        The method returns the sampled actions, which can be either grasps or placements, in
-        the form of position and quaternion tensors.
+        Takes in the output of load_and_predict. Input will have N environments, out 
+        of which M will be successes. Outputs the best grasp per environment
+        in the form of pos: (M, 3), quat: (M, 4). Also reports whether grasp prediction
+        was successful (length N)
 
-        Parameters
-        ----------
-        outputs: dict
-            The outputs produced by `load_and_predict`, containing action data along with
-            corresponding confidence scores.
-        num_actions: int
-            The number of actions (either grasps or placements) to sample.
-        action: str
-            Specifies the type of action to sample, either 'grasps' or 'placements'.
-
-        Returns
-        -------
-        pos: torch.tensor(float) shape: (num_actions, 3)
-            The positions of the sampled actions.
-        quat: torch.tensor(float) shape: (num_actions, 4)
-            The quaternions of the sampled actions.
-        success: torch.tensor(bool) shape: (num_actions,)
-            A tensor indicating whether the sampling and prediction of actions were successful
-            for each sampled action.
+        Returns: (pos, quat), success: torch.tensor(bool)
         '''
-
-        if(action == "grasps"):
-            conf = "grasp_confidence"
-        else:
-            conf = "placement_confidence"
-        best_actions = []
+        best_grasps = []
         successes = []
-        for i in range(len(outputs[action])): # iterates num envs
-            if len(outputs[action][i]) == 0:
+        for i in range(len(outputs["grasps"])): # iterates num envs
+            if len(outputs["grasps"][i]) == 0:
                 successes.append(False)
                 continue
-            actions = np.concatenate(outputs[action][i], axis=0)
-            action_conf = np.concatenate(outputs[conf][i], axis=0)
-            sorted_action_idxs = np.argsort(action_conf, axis=0) # ascending order of confidence
-            actions = actions[sorted_action_idxs]
-            best_actions.append(actions[-1])
+            grasps = np.concatenate(outputs["grasps"][i], axis=0)
+            grasp_conf = np.concatenate(outputs["grasp_confidence"][i], axis=0)
+            sorted_grasp_idxs = np.argsort(grasp_conf, axis=0) # ascending order of confidence
+            grasps = grasps[sorted_grasp_idxs]
+            best_grasps.append(grasps[-1])
             successes.append(True)
         
         # Turn grasp poses from M2T2 form to Isaac form
-        best_actions = torch.tensor(best_actions)
-        if len(best_actions) == 0:
+        best_grasps = torch.tensor(best_grasps)
+        if len(best_grasps) == 0:
             pos, quat = torch.zeros(1,1), torch.zeros(1,1)
         else:
-            pos, quat = self.m2t2_grasp_to_pos_and_quat(best_actions)
+            pos, quat = self.m2t2_grasp_to_pos_and_quat(best_grasps)
         return (pos, quat), torch.tensor(successes)
 
 
@@ -491,11 +457,10 @@ class Grasper:
         xyz = data['points'].cpu().numpy()
         cam_pose = data['cam_pose'].cpu().double().numpy()
         make_frame(vis, 'camera', T=cam_pose)
-        if not self.cfg.eval.world_coord:
+        if not self._cfg.eval.world_coord:
             xyz = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
         visualize_pointcloud(vis, 'scene', xyz, rgb, size=0.005)
         if data['task'] == 'pick':
-            print("Visualizing picking")
             # print(outputs['grasps'])
             for i, (grasps, conf, contacts, color) in enumerate(zip(
                 outputs['grasps'],
@@ -513,7 +478,7 @@ class Grasper:
                     contacts.numpy(), conf_colors, size=0.01
                 )
                 grasps = grasps.numpy()
-                if not self.cfg.eval.world_coord:
+                if not self._cfg.eval.world_coord:
                     grasps = cam_pose @ grasps
                 
                 for j, grasp in enumerate(grasps):
@@ -521,49 +486,4 @@ class Grasper:
                         vis, f"object_{i:02d}/grasps/{j:03d}",
                         grasp, color, linewidth=0.2
                     )
-        elif data['task'] == 'place':
-            print("Visualizing placement")
-            ee_pose = data['ee_pose'].double().numpy()
-            make_frame(vis, 'ee', T=ee_pose)
-            obj_xyz_ee, obj_rgb = data['object_inputs'].split([3, 3], dim=1)
-            obj_xyz_ee = (obj_xyz_ee + data['object_center']).numpy()
-            obj_xyz = obj_xyz_ee @ ee_pose[:3, :3].T + ee_pose[:3, 3]
-            obj_rgb = denormalize_rgb(obj_rgb.T.unsqueeze(2)).squeeze(2).T
-            obj_rgb = (obj_rgb.numpy() * 255).astype('uint8')
-            visualize_pointcloud(vis, 'object', obj_xyz, obj_rgb, size=0.005)
-            for i, (placements, conf, contacts) in enumerate(zip(
-                outputs['placements'],
-                outputs['placement_confidence'],
-                outputs['placement_contacts'],
-            )):
-                print(f"orientation_{i:02d} has {placements.shape[0]} placements")
-                conf = conf.numpy()
-                conf_colors = (np.stack([
-                    1 - conf, conf, np.zeros_like(conf)
-                ], axis=1) * 255).astype('uint8')
-                visualize_pointcloud(
-                    vis, f"orientation_{i:02d}/contacts",
-                    contacts.numpy(), conf_colors, size=0.01
-                )
-                placements = placements.numpy()
-                if not self.cfg.eval.world_coord:
-                    placements = cam_pose @ placements
-                visited = np.zeros((0, 3))
-                for j, k in enumerate(np.random.permutation(placements.shape[0])):
-                    if visited.shape[0] > 0:
-                        dist = np.sqrt((
-                            (placements[k, :3, 3] - visited) ** 2
-                        ).sum(axis=1))
-                        if dist.min() < self.cfg.eval.placement_vis_radius:
-                            continue
-                    visited = np.concatenate([visited, placements[k:k+1, :3, 3]])
-                    visualize_grasp(
-                        vis, f"orientation_{i:02d}/placements/{j:02d}/gripper",
-                        placements[k], [0, 255, 0], linewidth=0.2
-                    )
-                    obj_xyz_placed = obj_xyz_ee @ placements[k, :3, :3].T \
-                                + placements[k, :3, 3]
-                    visualize_pointcloud(
-                        vis, f"orientation_{i:02d}/placements/{j:02d}/object",
-                        obj_xyz_placed, obj_rgb, size=0.01
-                    )
+

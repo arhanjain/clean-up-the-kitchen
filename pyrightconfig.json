@@ -1,7 +1,0 @@
-{
-  "extraPaths": [
-     "/home/arhan/projects/IsaacLab/source/extensions/omni.isaac.lab_assets",
-     "/home/arhan/projects/IsaacLab/source/extensions/omni.isaac.lab",
-     "/home/arhan/projects/IsaacLab/source/extensions/omni.isaac.lab_tasks"
-  ]
-}

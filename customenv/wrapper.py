@@ -10,6 +10,9 @@ from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnv
 from PIL import Image
 
+
+# TODO, instead of having a wrapper, we can make a subclass that inherits
+# from managerbasedrlenv and add the necessary methods to it.
 class TestWrapper(Wrapper):
     def __init__(self, env: ManagerBasedRLEnv):
         if not isinstance(env.unwrapped, ManagerBasedRLEnv):
