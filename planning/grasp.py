@@ -47,10 +47,10 @@ class Grasper:
         self._cfg = grasp_cfg
 
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
-        self.get_manipulation(self, env, object_class, manipulation_type, viz=True)
+        return self.get_manipulation(env, object_class, manipulation_type, viz)
 
     def get_grasp(self, env, object_class, manipulation_type="grasps", viz=True):
-        self.get_manipulation(self, env, object_class, manipulation_type, viz=True)
+        return self.get_manipulation(env, object_class, manipulation_type, viz)
         
     
     def get_manipulation(self, env, object_class, manipulation_type, viz=True):

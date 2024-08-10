@@ -145,7 +145,6 @@ class Orchestrator:
                 case _:
                     raise ValueError("Invalid action type!")
 
-    
     def generate_cleanup_tasks(scene_info):
         """
         Generates a list of tasks needed to clean up the kitchen based on the scene layout.
@@ -158,7 +157,7 @@ class Orchestrator:
         """
 
         prompt_template = """Objective: 
-        Given a scene layout, generate a list of tasks needed to clean up the kitchen using actions like "grasp" and "place". Each task should be in the format of a ("action_type", {"target": "object_name"}). 
+        Given a scene layout, generate a list of tasks needed to clean up the kitchen using actions like "grasp" and "place". Each task should be in the format of a ("action_type", {{"target": "object_name"}}). 
         Identify objects that should be picked up and specify their target object.
 
         Task: Clean up the kitchen
@@ -168,33 +167,35 @@ class Orchestrator:
 
         1. Task: Clean up the kitchen
         Scene: ['cup', 'table']
-        Answer: [('grasp', {'target': 'cup'}), ('place', {'target': 'table'})]
+        Answer: [('grasp', {{"target": "cup"}}), ('place', {{"target": "table"}})]
 
         2. Task: Clean up the kitchen
         Scene: ['plate', 'cabinet']
-        Answer: [('grasp', {'target': 'plate'}), ('place', {'target': 'cabinet'})]
+        Answer: [('grasp', {{"target": "plate"}}), ('place', {{"target": "cabinet"}})]
 
         3. Task: Clean up the kitchen
         Scene: ['bowl', 'cup', 'table', 'cabinet']
-        Answer: [('grasp', {'target': 'bowl'}), ('place', {'target': 'cabinet'}), ('grasp', {'target': 'cup'}), ('place', {'target': 'cabinet'})]
+        Answer: [('grasp', {{"target": "bowl"}}), ('place', {{"target": "cabinet"}}), ('grasp', {{"target": "cup"}}), ('place', {{"target": "cabinet"}})]
 
         4. Task: Clean up the kitchen
         Scene: ['cup', 'sink', 'cabinet']
-        Answer: [('grasp', {'target': 'cup'}), ('place', {'target': 'sink'})]
+        Answer: [('grasp', {{"target": "cup"}}), ('place', {{"target": "sink"}})]
 
         5. Task: Clean up the kitchen
         Scene: ['bowl', 'sink', 'cup', 'plate', 'cabinet', 'table']
-        Answer: [('grasp', {'target': 'bowl'}), ('place', {'target': 'sink'}), ('grasp', {'target': 'cup'}), ('place', {'target': 'cabinet'}), ('grasp', {'target': 'plate'}), ('place', {'target': 'cabinet'})]
+        Answer: [('grasp', {{"target": "bowl"}}), ('place', {{"target": "sink"}}), ('grasp', {{"target": "cup"}}), ('place', {{"target": "cabinet"}}), ('grasp', {{"target": "plate"}}), ('place', {{"target": "cabinet"}})]
 
-        Generate ONLY the answer for the question above (e.g, [('grasp', {'target': 'bowl'}), ('place', {'target': 'sink'})]):
+        Generate ONLY the answer for the question above (e.g, [('grasp', {{"target": "bowl"}}), ('place', {{"target": "sink"}})]):
         """
         
         # Format scene_info as a string that can be inserted into the prompt
         scene_info_str = str(scene_info)
 
+        # Apply the template formatting
         formatted_prompt = prompt_template.format(scene=scene_info_str)
         
         return formatted_prompt
+
 
 
     def extract_objects_and_sites_info(usd_info_path):
