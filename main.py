@@ -118,7 +118,6 @@ def main():
             env.step(segment)
         env.reset()
     env.close()
-    exit()
 
 if __name__ == "__main__":
     # run the main function

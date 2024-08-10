@@ -142,9 +142,3 @@ class GraspAction(Action, action_name="grasp"):
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
 
-
-
-        
-
-
-
