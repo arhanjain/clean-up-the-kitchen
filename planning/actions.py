@@ -176,20 +176,17 @@ class PlaceAction(Action, action_name="place"):
         traj = torch.cat((traj, gripper_action), dim=2)
         for pose_idx in range(traj.shape[1]):
             yield traj[:, pose_idx]
-        breakpoint()
         # Go to place pose
         closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1)
         go_to_grasp = torch.cat((place_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield go_to_grasp
 
-        breakpoint()
         # open gripper
         opened_gripper = torch.ones(env.unwrapped.num_envs, 1)
         open_gripper = torch.cat((place_pose, opened_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield open_gripper
-        breakpoint()
 
         # Go to pregrasp pose
         go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)
