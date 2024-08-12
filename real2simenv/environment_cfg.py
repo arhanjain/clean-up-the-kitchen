@@ -1,12 +1,6 @@
 
-from dataclasses import MISSING
-import torch
-import re
 import numpy as np
-import yaml
-from omni.isaac.lab.markers.visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
-import omni.isaac.lab.utils.math as math
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
@@ -35,7 +29,7 @@ from .utils import usd_utils, misc_utils
 from .sensor import SiteCfg
 
 @configclass
-class CubeSceneCfg(InteractiveSceneCfg):
+class Real2SimSceneCfg(InteractiveSceneCfg):
     """Configuration for the lift scene with a robot and a object.
     This is the abstract base implementation, the exact scene is defined in the derived classes
     which need to set the target object, robot and end-effector frames
@@ -241,7 +235,7 @@ class ObservationsCfg:
 
         def __post_init__(self):
             self.enable_corruption = True
-            self.concatenate_terms = True
+            self.concatenate_terms = False
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -315,11 +309,11 @@ class CurriculumCfg:
 
 
 @configclass
-class CubeEnvCfg(ManagerBasedRLEnvCfg):
+class Real2SimCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # # Scene settings
-    scene: CubeSceneCfg = CubeSceneCfg(num_envs=4, env_spacing=3)
+    scene = Real2SimSceneCfg(num_envs=4, env_spacing=3)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -333,10 +327,10 @@ class CubeEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """Post initialization."""
         # general settings
-        self.decimation = 2
+        self.decimation = 5 # 20 hz for control/step
         self.episode_length_s = 5.0
         # simulation settings
-        self.sim.dt = 0.01  # 100Hz
+        self.sim.dt = 0.01  # 100Hz for physx
 
         self.sim.physx.bounce_threshold_velocity = 0.2
         self.sim.physx.bounce_threshold_velocity = 0.01

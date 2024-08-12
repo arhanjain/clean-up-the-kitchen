@@ -1,5 +1,6 @@
 import argparse
 from omni.isaac.lab.app import AppLauncher
+from wrappers.logger import wrap_env_in_logger
 
 parser = argparse.ArgumentParser(description="test")
 parser.add_argument(
@@ -24,29 +25,16 @@ simulation_app = app_launcher.app
 
 ########################################
 
-import os
 import torch
-import numpy as np
 import gymnasium as gym
-import customenv
+import real2simenv
 from omni.isaac.lab_tasks.utils import parse_env_cfg
-from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
-import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
+# from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
-from customenv import TestWrapper
 from omegaconf import OmegaConf
-from m2t2.m2t2 import M2T2
 
-from stable_baselines3 import PPO
-from stable_baselines3.common.logger import configure
-from stable_baselines3.common.callbacks import CheckpointCallback
 from planning.orchestrator import Orchestrator
-from customenv import TestWrapper
 from omni.isaac.lab_tasks.utils import parse_env_cfg
-from omni.isaac.lab_tasks.utils.wrappers.sb3 import process_sb3_cfg, Sb3VecEnvWrapper
-from datetime import datetime
-import hydra
 import yaml
 
 def do_nothing(env):
@@ -67,7 +55,7 @@ def main():
             cfg.usd_info = yaml.safe_load(usd_info_file)
 
     # create environment configuration
-    env_cfg = parse_env_cfg(
+    env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
         use_gpu=not args_cli.cpu,
         num_envs=args_cli.num_envs,
@@ -83,20 +71,20 @@ def main():
     video_kwargs = viewer_cfg
 
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
+    env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
+
     # apply wrappers
-    env = TestWrapper(env)
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
+    env = wrap_env_in_logger(env)
+
     # Reset environment
-    obs, info = env.reset()
+    env.reset()
 
     # Temp fix to image rendering, so that it captures RGB correctly before entering.
-    for _ in range(10):
-        action = torch.tensor(env.action_space.sample()).to(env.device)
-        env.step(action)
-    obs, info = env.reset()
+    do_nothing(env)
+    env.reset()
 
 
     orchestrator = Orchestrator(env, cfg)

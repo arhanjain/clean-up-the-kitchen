@@ -1,28 +1,36 @@
 import torch
 import pickle
+import gymnasium as gym
 import numpy as np
 import omni.isaac.lab.utils.math as math
 
-from . import mdp
 from .utils import misc_utils
-from gymnasium import Wrapper
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnv
-from PIL import Image
+from typing import Optional
 
 
-# TODO, instead of having a wrapper, we can make a subclass that inherits
-# from managerbasedrlenv and add the necessary methods to it.
-class TestWrapper(Wrapper):
-    def __init__(self, env: ManagerBasedRLEnv):
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv):
-            raise ValueError("Environment must be a ManagerBasedRLEnv...")
 
-        # self.env = env 
-        # self.scene = env.scene
-        super().__init__(env)
-    
+class Real2SimRLEnv(ManagerBasedRLEnv):
+    def __init__(self, custom_cfg, *args, **kwargs):
+        self.custom_cfg = custom_cfg
+        super().__init__(*args, **kwargs)
+
     def get_joint_info(self):
+        '''
+        Get joint information of the Franka robot entity in the scene,
+        for all N environemnts.
+
+        Returns
+        -------
+        joint_pos : torch.Tensor((N, 7)), dtype=torch.float32)
+            Joint positions of the robot entity in the scene.
+        joint_vel : torch.Tensor((N, 7)), dtype=torch.float32)
+            Joint velocities of the robot entity in the scene.
+        joint_names : list
+            List of joint names of the robot entity in the scene.
+        '''
+
         # Specify robot-specific parameters
         robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
         robot_entity_cfg.resolve(self.scene)
@@ -35,6 +43,21 @@ class TestWrapper(Wrapper):
         return joint_pos, joint_vel, joint_names
 
     def get_camera_data(self):
+        '''
+        Get camera data for all N environments.
+
+        Returns
+        -------
+        rgb : torch.Tensor((N, H, W, 3), dtype=torch.float32)
+            RGB image data from the camera in the scene.
+        seg : torch.Tensor((N, H, W), dtype=torch.uint8):
+            Segmentation mask data from the camera in the scene.
+        depth : torch.Tensor((N, H, W), dtype=torch.float32)
+            Depth values per pixel from the camera in the scene.
+        metadata : list
+            List of metadata for each environment. Includes segmenation label map,
+            camera intrinsics, camera pose, end-effector pose, and scene bounds.
+        '''
         
         # RGB Image
         rgb = self.scene["camera"].data.output["rgb"]
@@ -51,9 +74,10 @@ class TestWrapper(Wrapper):
         # Depth values per pixel
         depth = self.scene["camera"].data.output["distance_to_image_plane"]
 
-        # Assemble metadata
+        # camera intrinsics
         intrinsics = self.scene["camera"].data.intrinsic_matrices
-        # camera pose
+
+        # camera pose (extrinsics)
         cam_pos_w = self.scene["camera"].data.pos_w
         cam_quat_w = self.scene["camera"].data.quat_w_ros
 
@@ -69,6 +93,7 @@ class TestWrapper(Wrapper):
 
         ee_transfomration = misc_utils.pos_and_quat_to_matrix(ee_frame.data.target_pos_source[:,0], ee_frame.data.target_quat_source[:, 0])
         
+        # Assemble metadata
         metadata = []
         for i in range(self.num_envs):
             m = {
@@ -81,21 +106,18 @@ class TestWrapper(Wrapper):
             metadata.append(m)
 
         # For debugging purposes
-        save_dir = "./data"
+        # save_dir = "./data"
         # everything should be numpy
         # Remove 4th channel for rgb
         rgb = rgb[..., :-1].cpu().numpy()
         seg = seg
         depth = depth.cpu().numpy()
 
-        np.save(f"{save_dir}/rgb.npy", rgb)        
-        np.save(f"{save_dir}/mask.npy", seg)
-        np.save(f"{save_dir}/depth.npy", depth)
-        with open(f"{save_dir}/meta_data.pkl", "wb") as f:
-            pickle.dump(metadata, f)
+        # np.save(f"{save_dir}/rgb.npy", rgb)        
+        # np.save(f"{save_dir}/mask.npy", seg)
+        # np.save(f"{save_dir}/depth.npy", depth)
+        # with open(f"{save_dir}/meta_data.pkl", "wb") as f:
+        #     pickle.dump(metadata, f)
 
         return rgb, seg, depth, metadata
 
-
-    def goal_pose(self):
-        return mdp.generated_commands(self.env, "object_pose")

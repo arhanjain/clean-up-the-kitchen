@@ -68,7 +68,7 @@ class MotionPlanner:
         trajopt_tsteps = 16
         trim_steps = None
         max_attempts = 4
-        interpolation_dt = 0.01
+        interpolation_dt = 0.05
         motion_gen_config = MotionGenConfig.load_from_robot_config(
             robot_cfg,
             world_cfg_list,
