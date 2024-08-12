@@ -8,17 +8,10 @@ import argparse
 from pxr import Usd
 from omni.isaac.lab.utils import math
 
-def GUI_matrix_to_pos_and_quat(matrix: torch.Tensor):
-    '''
-    Takes in a 4x4 matrix,
-    '''
+def matrix_to_pos_and_quat(matrix: torch.Tensor):
     pos = matrix[-1, :3]
-    temp = pos.clone()
-    pos[2] = temp[1]
-    pos[1] = -temp[2]
     quat = math.quat_from_matrix(matrix[:3, :3])
     return pos, quat
-
 
 def show_pcd(prim):
     pcd = []
@@ -55,7 +48,7 @@ def show_pcd(prim):
 def get_pos_quat(prim):
     transform = prim.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
     transform = torch.tensor(transform)
-    pos, quat = GUI_matrix_to_pos_and_quat(transform)
+    pos, quat = matrix_to_pos_and_quat(transform)
     return pos.tolist(), quat.tolist()
 
     
@@ -63,7 +56,7 @@ def get_pos_quat(prim):
 def process_site(prim):
     transform = prim.GetChildren()[0].GetAttribute("xformOp:transform").Get()
     transform = torch.tensor(transform)
-    pos, _ = GUI_matrix_to_pos_and_quat(transform)
+    pos, _ = matrix_to_pos_and_quat(transform)
     pos = pos.tolist()
     source = prim.GetChildren()[0].GetChild("FixedJoint").GetRelationship("physics:body0").GetTargets()[0].pathString.split("/")[2]
     return source, pos

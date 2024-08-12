@@ -1,4 +1,4 @@
-usd_info_path: "./data/bowl2sink_xform_mapping.yml"
+usd_info_path: "./data/cluttered_scene_xform_mapping.yml"
 log_dir: "./logs"
 
 sb3:
