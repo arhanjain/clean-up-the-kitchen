@@ -102,11 +102,23 @@ def main():
     orchestrator = Orchestrator(env, cfg) 
 
     # Get the scene info and then plan
-    scene_info = Orchestrator.extract_objects_and_sites_info(cfg.usd_info_path)
-    prompt = Orchestrator.generate_cleanup_tasks(scene_info)
-    plan_template = Orchestrator.get_plan(prompt)
-    print('plan template:', plan_template)
-    plan_template = eval(plan_template)
+    # scene_info = Orchestrator.extract_objects_and_sites_info(cfg.usd_info_path)
+    # prompt = Orchestrator.generate_cleanup_tasks(scene_info)
+    # plan_template = Orchestrator.get_plan(prompt)
+    # print('plan template:', plan_template)
+    # plan_template = eval(plan_template)
+    plan_template = [
+        ("grasp",
+            {
+                "target": "bowl",
+            },
+        ),
+        ("place",
+            {
+                "target": "bowl",
+            }
+         ),
+    ]
     
     # Simulate environment
     while simulation_app.is_running():

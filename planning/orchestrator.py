@@ -2,7 +2,7 @@ from .grasp import Grasper
 from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
 import torch
-from openai import OpenAI
+# from openai import OpenAI
 import yaml
 
 class Orchestrator:

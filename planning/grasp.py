@@ -100,7 +100,7 @@ class Grasper:
         return torch.cat([goal_pos, goal_quat], dim=1), success
 
     @staticmethod
-    def get_pregrasp(grasp_pose, offset):
+    def get_prepose(pose, offset):
         '''
         Returns the pregrasp pose for a given grasp pose and offset
         Parameters
@@ -115,7 +115,7 @@ class Grasper:
             The position and quaternion of the pregrasp poses
         '''
 
-        pos, quat = grasp_pose[:, :3], grasp_pose[:, 3:]
+        pos, quat = pose[:, :3], pose[:, 3:]
 
         # Normalize quaternions
         # norms = torch.norm(quat, dim=1, keepdim=True)
@@ -135,7 +135,7 @@ class Grasper:
             1 - 2 * (x**2 + y**2)
         ], dim=-1)
 
-        pregrasp = grasp_pose.clone()
+        pregrasp = pose.clone()
         pregrasp[:, :3] -= offset * direction
 
         return pregrasp
@@ -634,7 +634,7 @@ class Grasper:
                         dist = np.sqrt((
                             (placements[k, :3, 3] - visited) ** 2
                         ).sum(axis=1))
-                        if dist.min() < self.cfg.eval.placement_vis_radius:
+                        if dist.min() < self._cfg.eval.placement_vis_radius:
                             continue
                     visited = np.concatenate([visited, placements[k:k+1, :3, 3]])
                     visualize_grasp(
