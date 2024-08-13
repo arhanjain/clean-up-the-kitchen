@@ -60,7 +60,7 @@ class MotionPlanner:
             world_cfg = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            # usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
             world_cfg_list.append(world_cfg)
 
         trajopt_dt = None
@@ -91,7 +91,7 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        # usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        usd_help.add_world_to_stage(world_cfg, base_frame="/World")
         self.device = env.device
 
         # Forward kinematics

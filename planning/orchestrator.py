@@ -2,8 +2,9 @@ from .grasp import Grasper
 from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
 import torch
-# from openai import OpenAI
+from openai import OpenAI
 import yaml
+import re
 
 class Orchestrator:
     '''
@@ -131,3 +132,27 @@ class Orchestrator:
             ],
         )
         return response.choices[0].message.content
+
+    def parse_plan_template(plan_str):
+        # # Remove comments and strip the string
+        # plan_str = re.sub(r'#.*', '', plan_str).strip()
+
+        # # Define regex patterns to extract actions and parameters
+        # action_pattern = re.compile(r'\(\s*\'(\w+)\'\s*,\s*{([^}]*)}\s*\)')
+        # param_pattern = re.compile(r'\'(\w+)\'\s*:\s*\'(\w+)\'')
+
+        # plan = []
+        # for action_match in action_pattern.finditer(plan_str):
+        #     action = action_match.group(1)
+        #     params_str = action_match.group(2)
+        #     params = {}
+            
+        #     for param_match in param_pattern.finditer(params_str):
+        #         key = param_match.group(1)
+        #         value = param_match.group(2)
+        #         params[key] = value
+            
+        #     plan.append((action, params))
+
+        # return plan
+        pass

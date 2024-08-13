@@ -47,7 +47,14 @@ class Grasper:
         self._cfg = grasp_cfg
 
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
-        return self.get_manipulation(env, object_class, manipulation_type, viz)
+        # return self.get_manipulation(env, object_class, manipulation_type, viz)
+        quaternion = [0.0896, -0.7723, -0.6288,  0.0105]
+
+        # Position (-0.6111233234405518, -0.10871953517198563, 0.06809773296117783)
+        position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
+
+        # Combine quaternion and position into a single tensor
+        return torch.tensor([position + quaternion]).float()
 
     def get_grasp(self, env, object_class, manipulation_type="grasps", viz=True):
         return self.get_manipulation(env, object_class, manipulation_type, viz)
@@ -421,6 +428,7 @@ class Grasper:
                 d['task'] = 'pick'
             else:
                 d['task'] = 'place'
+                obj_label = None
 
             inputs, xyz, seg = d['inputs'], d['points'], d['seg']
             obj_inputs = d['object_inputs']

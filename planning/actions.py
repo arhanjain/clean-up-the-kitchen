@@ -160,14 +160,14 @@ class PlaceAction(Action, action_name="place"):
         traj = None
         while traj is None:
             # Get place pose
-            success = torch.zeros(env.unwrapped.num_envs)
-            place_pose = None
-            while not torch.all(success):
-                place_pose, success = grasper.get_placement(env, self.target)
+            # success = torch.zeros(env.unwrapped.num_envs)
+            # place_pose = None
+            # while not torch.all(success):
+            #     place_pose, success = grasper.get_placement(env, self.target)
             
+            place_pose = grasper.get_placement(env, self.target)
             # Get pregrasp pose
             preplace_pose = grasper.get_prepose(place_pose, 0.1)
-
             # Plan motion to pregrasp
             traj = planner.plan(preplace_pose, mode="ee_pose")
         

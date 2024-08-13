@@ -1,4 +1,4 @@
-usd_info_path: "./data/bowl2sink_xform_mapping.yml"
+usd_info_path: "./data/cluttered2_xform_mapping.yml"
 log_dir: "./logs"
 
 sb3:
@@ -153,7 +153,7 @@ grasp:
 
   eval:
     data_dir: ''
-    checkpoint: '/home/arhan/Downloads/m2t2.pth'
+    checkpoint: '/home/jacob/projects/clean-up-the-kitchen/M2T2/m2t2.pth'
     mask_thresh: 0.4
     object_thresh: 0.4
     num_runs: 1

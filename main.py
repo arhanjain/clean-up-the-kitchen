@@ -107,28 +107,44 @@ def main():
     # plan_template = Orchestrator.get_plan(prompt)
     # print('plan template:', plan_template)
     # plan_template = eval(plan_template)
+    # plan_template = Orchestrator.parse_plan_template(plan_template)
+    # plan_template = [
+    #     ("grasp",
+    #         {
+    #             "target": "bowl",
+    #         },
+    #     ),
+    #     ("place",
+    #         {
+    #             "target": "bowl",
+    #         }
+    #      ),
+    # ]
     plan_template = [
-        ("grasp",
-            {
-                "target": "bowl",
-            },
-        ),
-        ("place",
-            {
-                "target": "bowl",
-            }
-         ),
+        ('grasp', {"target": "blue_cup"}), 
+        ('place', {"target": "blue_cup"}), 
+        ('grasp', {"target": "bowl"}), 
+        ('place', {"target": "bowl"}), 
+        ('grasp', {"target": "ketchup"}), 
+        ('place', {"target": "ketchup"}), 
+        ('grasp', {"target": "paper_cup"}), 
+        ('place', {"target": "paper_cup"}), 
+        ('grasp', {"target": "big_spoon"}), 
+        ('place', {"target": "big_spoon"})
     ]
-    
+ 
+    # Not going through plan_template fully 
     # Simulate environment
     while simulation_app.is_running():
         do_nothing(env)
         full_plan = orchestrator.generate_plan_from_template(plan_template)
-
-        # ignoring using torch inference mode for now
+        
         for segment in full_plan:
-            env.step(segment)
-        env.reset()
+            obs, rew, done, trunc, info = env.step(segment)
+            
+            # if done:
+            #     print("finished")
+            #     break
     env.close()
 
 if __name__ == "__main__":
