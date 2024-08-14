@@ -26,7 +26,7 @@ from curobo.wrap.reacher.motion_gen import (
     PoseCostMetric,
 )
 from typing import List, Tuple
-    
+from pxr import UsdGeom, UsdShade, Gf, Sdf
 class MotionPlanner:
     '''
     The motion planning system. Uses the CuRobo library to plan trajectories.
@@ -54,13 +54,12 @@ class MotionPlanner:
             load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"], 
             self.tensor_args,
         )
-    
         world_cfg_list = []
         for i in range(env.num_envs):
             world_cfg = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            # self.add_collision_visuals_to_stage(usd_help, world_cfg, base_frame=f"/World/world_{i}")
             world_cfg_list.append(world_cfg)
 
         trajopt_dt = None
@@ -91,7 +90,7 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        usd_help.add_world_to_stage(world_cfg, base_frame="/World") # adds the viz inside
         self.device = env.device
 
         # Forward kinematics
@@ -186,4 +185,65 @@ class MotionPlanner:
             pose = torch.cat((t.ee_position, t.ee_quaternion), dim=1)
             tensors.append(pose)
         return torch.stack(tensors)
+
+    def add_collision_visuals_to_stage(self, usd_help, world_cfg, base_frame):
+        """
+        Adds visual representations of the collision meshes to the USD stage.
+
+        Parameters
+        ----------
+        usd_help : UsdHelper
+            The USD helper instance to modify the USD stage.
+        world_cfg : WorldConfig
+            The world configuration containing collision objects.
+        base_frame : str
+            The base USD path where the objects should be added.
+        """
+        stage = usd_help.stage
+
+        for obj in world_cfg.objects:
+            name = obj.name
+            dims = obj.dims
+            pose = obj.pose
+
+            # Adjust the translation vector: assuming pose[0:3] is in the form [x, y, z]
+            pos = pose[:3]
+            adjusted_pos = [pos[0], -pos[2], pos[1]]  # Y and Z axis flip to match the USD coordinate system
+
+            # Quaternion for rotation: assuming pose[3:7] is [qw, qx, qy, qz]
+            quat = pose[3:7]
+
+            # Create a new Xform (transform) at the specified base frame
+            cuboid_path = f"{base_frame}/{name}_collision"
+            xform = UsdGeom.Xform.Define(stage, cuboid_path)
+
+            # Build the transformation matrix
+            translation = Gf.Matrix4d().SetTranslate(Gf.Vec3d(adjusted_pos))
+            rotation = Gf.Matrix4d().SetRotate(Gf.Quatf(quat[0], Gf.Vec3f(quat[1], quat[2], quat[3])))
+            scale = Gf.Matrix4d().SetScale(Gf.Vec3d(dims))
+
+            transform_matrix = translation * rotation * scale
+
+            # Apply the transformation matrix
+            xform.AddTransformOp().Set(transform_matrix)
+
+            # Create a cube and set its size (1.0 since scaling is handled by the matrix)
+            cuboid = UsdGeom.Cube.Define(stage, f"{cuboid_path}/Cube")
+            cuboid.GetSizeAttr().Set(1.0)
+
+            # Create a material and shader using UsdShade
+            material = UsdShade.Material.Define(stage, f"{cuboid_path}/Material")
+            shader = UsdShade.Shader.Define(stage, f"{cuboid_path}/Material/Shader")
+            shader.CreateIdAttr("UsdPreviewSurface")
+
+            # Correctly specify the SdfValueTypeName for the color input
+            shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Float3).Set(Gf.Vec3f(1.0, 0.0, 0.0))  # Red color
+            material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+
+            # Bind the material to the cuboid
+            UsdShade.MaterialBindingAPI(cuboid.GetPrim()).Bind(material)
+
+            print(f"Added visual cuboid for {name} at {cuboid_path}")
+
+
 
