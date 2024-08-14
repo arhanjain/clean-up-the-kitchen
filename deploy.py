@@ -1,6 +1,5 @@
 import argparse
 from omni.isaac.lab.app import AppLauncher
-from wrappers.logger import wrap_env_in_logger
 
 parser = argparse.ArgumentParser(description="test")
 parser.add_argument(
@@ -9,13 +8,14 @@ parser.add_argument(
 parser.add_argument(
     "--disable_fabric",
     action="store_true",
-    default=False,
-    help="Disable fabric and use USD I/O operations.",
-)
+    default=False, help="Disable fabric and use USD I/O operations.",) 
 parser.add_argument(
-    "--num_envs", type=int, default=None, help="Number of environments to simulate."
+    "--num_envs", type=int, default=1, help="Number of environments to simulate."
 )
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+parser.add_argument("--name", type=str, required=True, help="Name of the experiment.")
+parser.add_argument("--checkpoint", type=str, required=True, help="Epoch to load.")
+
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -33,18 +33,14 @@ from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from omegaconf import OmegaConf
 
-from planning.orchestrator import Orchestrator
+# from planning.orchestrator import Orchestrator # requires recompiling m2t2 stuff with newer torch
 from omni.isaac.lab_tasks.utils import parse_env_cfg
+from wrappers.logger import DataCollector
 import yaml
+from models.GMM import MLP
 
 def do_nothing(env):
-    ee_frame_sensor = env.unwrapped.scene["ee_frame"]
-    tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
-    tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
-    gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
-    action = torch.cat([tcp_rest_position, tcp_rest_orientation, gripper], dim=-1)
-    for _ in range(10):
-        env.step(action)
+    env.step(torch.tensor(env.action_space.sample()).to(env.unwrapped.device))
 
 def main():
     # Load configuration
@@ -77,30 +73,30 @@ def main():
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
 
-    env = wrap_env_in_logger(env)
-
     # Reset environment
     env.reset()
 
     # Temp fix to image rendering, so that it captures RGB correctly before entering.
     do_nothing(env)
-    env.reset()
+    obs, info = env.reset()
 
-
-    orchestrator = Orchestrator(env, cfg)
-    plan_template = [
-        ("grasp", {"target":"bowl"}),
-    ]
+    # Load model
+    obs_space = gym.spaces.flatten_space(env.observation_space).shape[0]
+    action_space = gym.spaces.flatten_space(env.action_space).shape[0]
+    model = MLP(obs_space, action_space)
+    saved = torch.load(f"./runs/{args_cli.name}/model_{args_cli.checkpoint}.pth")
+    model.load_state_dict(saved["model_state_dict"])
+    model = model.to(env.unwrapped.device)
 
     # Simulate environment
-    while simulation_app.is_running():
-        do_nothing(env)
-        full_plan = orchestrator.generate_plan_from_template(plan_template)
+    with torch.inference_mode():
+        while simulation_app.is_running():
+            obs = DataCollector.to_numpy(obs)
+            obs = gym.spaces.flatten(env.observation_space, obs)
+            obs = torch.tensor(obs, dtype=torch.float32).to(env.unwrapped.device)
+            act = model(obs)
+            obs, rew, done, trunc, info = env.step(act.unsqueeze(0))
 
-        # ignoring using torch inference mode for now
-        for segment in full_plan:
-            env.step(segment)
-        env.reset()
     env.close()
 
 

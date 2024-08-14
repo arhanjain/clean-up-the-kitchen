@@ -77,7 +77,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
-            debug_vis=False,
+            debug_vis=True,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
@@ -124,48 +124,6 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
                     debug_vis=True,
                     offset=offset.tolist()
                 )
-
-
-
-        # site_pattern = r"^SiteXform_\d+$"
-        # xform_263_pos = None
-        # for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
-        #     name = entry.GetName()
-        #     if re.match(site_pattern, name):
-        #         # handle site
-        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-        #         transform = torch.tensor(transform)
-        #         pos, _ = misc_utils.GUI_matrix_to_pos_and_quat(transform)
-        #
-        #         offset = pos - xform_263_pos
-        #
-        #         # number = name.split("_")[-1]
-        #         objs[name] = SiteCfg(
-        #             prim_path=f"{{ENV_REGEX_NS}}/Xform_{263}",
-        #             debug_vis=True,
-        #             offset=offset
-        #         )
-        #     else:
-        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-        #         transform = torch.tensor(transform)
-        #         pos, quat = misc_utils.GUI_matrix_to_pos_and_quat(transform)
-        #         # pos, quat = (0,0,0), (1,0,0,0)
-        #         objs[name] = RigidObjectCfg(
-        #             prim_path=f"{{ENV_REGEX_NS}}/{name}",
-        #             init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-        #             spawn=usd_utils.CustomRigidUSDCfg(
-        #                 usd_path=usd_path,
-        #                 usd_sub_path=entry.GetPath().pathString,
-        #                 rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True if name == "Xform_263" else False),
-        #                 collision_props=CollisionPropertiesCfg(),
-        #                 semantic_tags=[("class", "obj")] if name == "Xform_266" else [],
-        #             )
-        #         )
-        #
-        #         if name == "Xform_263":
-        #             xform_263_pos = pos
-        #
-        # 
 
         for k, v in objs.items():
             setattr(self, k, v)
@@ -239,6 +197,13 @@ class ObservationsCfg:
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    
+    def setup(self, usd_info):
+        for name in usd_info["sites"]:
+            setattr(self.policy, name, ObsTerm(
+                    func=mdp.object_position_in_robot_root_frame, 
+                    params={"object_cfg": SceneEntityCfg(name)}
+                    ))
 
 
 @configclass

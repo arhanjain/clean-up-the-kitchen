@@ -152,15 +152,15 @@ class MotionPlanner:
 
         # Extract the trajectories based on single vs batch
         traj = [result.interpolated_plan] if len(ik_goal) == 1 else result.get_paths()
+        for t in traj:
+            if t is None:
+                return None
 
         # Return in desired format
         if mode == "joint_pos":
             return traj
         elif mode == "ee_pose":
-            try:
-                ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
-            except:
-                breakpoint()
+            ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
             ee_trajs = self.format_plan(ee_trajs)
             return ee_trajs 
         else:
