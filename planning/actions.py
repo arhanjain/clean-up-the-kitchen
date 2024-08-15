@@ -103,7 +103,10 @@ class GraspAction(Action, action_name="grasp"):
             raise ValueError("Grasper service not found")
         if planner is None:
             raise ValueError("Motion planner service not found")
-
+        
+        planner.list_obstacles()
+        # Disable collision for target before grasping
+        planner.disable_collision_for_target(self.target) 
 
         # Find successful plan
         traj = None
@@ -119,12 +122,15 @@ class GraspAction(Action, action_name="grasp"):
 
             # Plan motion to pregrasp
             traj = planner.plan(pregrasp_pose, mode="ee_pose")
-        
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
         traj = torch.cat((traj, gripper_action), dim=2)
         for pose_idx in range(traj.shape[1]):
             yield traj[:, pose_idx]
+
+        # Calculate distances and attach the closest object to the robot
+        ee_pose_at_pregrasp = traj[:, -1, :3].detach().clone()
+        planner.attach_closest_object_to_robot(ee_pose_at_pregrasp)
 
         # Go to grasp pose
         opened_gripper = torch.ones(env.unwrapped.num_envs, 1)
@@ -155,6 +161,9 @@ class PlaceAction(Action, action_name="place"):
             raise ValueError("Grasper service not found")
         if planner is None:
             raise ValueError("Motion planner service not found")
+        
+        # Technically unnecesarry since it's already attached to the robot.
+        # planner.disable_collision_for_target(self.target)
 
         # Find successful plan
         traj = None
@@ -188,6 +197,10 @@ class PlaceAction(Action, action_name="place"):
         for _ in range(self.GRASP_STEPS):
             yield open_gripper
 
+        # Detach from robot once it has been dropped
+        planner.detach_object_from_robot()
+        planner.enable_collision_for_target(self.target)
+        
         # Go to pregrasp pose
         go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):

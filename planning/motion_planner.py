@@ -1,7 +1,7 @@
 import torch
 # CuRobo 
 from curobo.geom.sdf.world import CollisionCheckerType 
-from curobo.geom.types import WorldConfig 
+from curobo.geom.types import WorldConfig, Cuboid, Material, Mesh
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.robot import CudaRobotModelConfig, JointState, RobotConfig
@@ -9,6 +9,7 @@ from curobo.types.state import JointState
 from curobo.util.logger import log_error, setup_curobo_logger
 from curobo.util.usd_helper import UsdHelper
 from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel
+from curobo.geom.sphere_fit import SphereFitType
 from curobo.util_file import (
     get_assets_path,
     get_filename,
@@ -27,6 +28,8 @@ from curobo.wrap.reacher.motion_gen import (
 )
 from typing import List, Tuple
 from pxr import UsdGeom, UsdShade, Gf, Sdf
+from curobo.geom.sdf.world_mesh import WorldMeshCollision, WorldCollisionConfig
+
 class MotionPlanner:
     '''
     The motion planning system. Uses the CuRobo library to plan trajectories.
@@ -36,7 +39,6 @@ class MotionPlanner:
     env: ManagerBasedRLEnv
         The environment to plan in.
     '''
-
     def __init__(self, env):
         usd_help = UsdHelper()
 
@@ -54,12 +56,13 @@ class MotionPlanner:
             load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"], 
             self.tensor_args,
         )
+    
         world_cfg_list = []
         for i in range(env.num_envs):
             world_cfg = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            # self.add_collision_visuals_to_stage(usd_help, world_cfg, base_frame=f"/World/world_{i}")
+            # usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
             world_cfg_list.append(world_cfg)
 
         trajopt_dt = None
@@ -76,9 +79,10 @@ class MotionPlanner:
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
             collision_cache={"obb": 30, "mesh": 100},
-            )
+        )
 
         self.motion_gen = MotionGen(motion_gen_config)
+        self.world_collision = self.motion_gen.world_coll_checker
         # print("warming up...")
         # self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
         print("Curobo is ready!")
@@ -90,13 +94,12 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        usd_help.add_world_to_stage(world_cfg, base_frame="/World") # adds the viz inside
+        # usd_help.add_world_to_stage(world_cfg, base_frame="/World")
         self.device = env.device
 
         # Forward kinematics
         self.kin_model = CudaRobotModel(robot_cfg.kinematics)
         self.env = env
-        # update obstacles and stuff
 
     def plan(self, goal, mode="ee_pose") -> torch.Tensor | None:
         '''
@@ -115,6 +118,8 @@ class MotionPlanner:
         traj : torch.Tensor((N, Plan Length, 7), dtype=float32) | None
             List of trajectories for each environment, None if planning failed
         '''
+        # self.update_obstacles() # Update the world with obstacles
+
         jp, jv, jn = self.env.get_joint_info()
         cu_js = JointState( position=self.tensor_args.to_device(jp),
             velocity=self.tensor_args.to_device(jv) * 0.0,
@@ -186,64 +191,112 @@ class MotionPlanner:
             tensors.append(pose)
         return torch.stack(tensors)
 
-    def add_collision_visuals_to_stage(self, usd_help, world_cfg, base_frame):
-        """
-        Adds visual representations of the collision meshes to the USD stage.
+    def attach_closest_object_to_robot(self, ee_position, offset=[0, 0, 0.01]):
+        '''
+        Attaches the closest object to the robot's collision model after calculating the distance
+        from the pregrasp pose.
+        '''
+        # Get the current end-effector position from the pregrasp pose
 
-        Parameters
-        ----------
-        usd_help : UsdHelper
-            The USD helper instance to modify the USD stage.
-        world_cfg : WorldConfig
-            The world configuration containing collision objects.
-        base_frame : str
-            The base USD path where the objects should be added.
-        """
-        stage = usd_help.stage
+        # Get a list of obstacles
+        obstacle_list = self.list_obstacles()
+        closest_object = None
+        min_distance = float('inf')
+        # Calculate distance to each object
 
-        for obj in world_cfg.objects:
-            name = obj.name
-            dims = obj.dims
-            pose = obj.pose
+        for obstacle in obstacle_list:
+            if obstacle is not None:
+                obstacle_position = torch.tensor(self.world_collision.world_model.get_obstacle(obstacle).pose[:3]).to(ee_position.device)
+                distance = torch.norm(ee_position - obstacle_position)
+                print(obstacle, distance)
 
-            # Adjust the translation vector: assuming pose[0:3] is in the form [x, y, z]
-            pos = pose[:3]
-            adjusted_pos = [pos[0], -pos[2], pos[1]]  # Y and Z axis flip to match the USD coordinate system
+                # Check if this object is the closest
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_object = obstacle
 
-            # Quaternion for rotation: assuming pose[3:7] is [qw, qx, qy, qz]
-            quat = pose[3:7]
+        if closest_object is None:
+            raise ValueError("No valid obstacles found.")
 
-            # Create a new Xform (transform) at the specified base frame
-            cuboid_path = f"{base_frame}/{name}_collision"
-            xform = UsdGeom.Xform.Define(stage, cuboid_path)
+        # Attach the closest object to the robot
+        joint_positions, joint_velocities, joint_names = self.env.get_joint_info()
 
-            # Build the transformation matrix
-            translation = Gf.Matrix4d().SetTranslate(Gf.Vec3d(adjusted_pos))
-            rotation = Gf.Matrix4d().SetRotate(Gf.Quatf(quat[0], Gf.Vec3f(quat[1], quat[2], quat[3])))
-            scale = Gf.Matrix4d().SetScale(Gf.Vec3d(dims))
+        joint_state = JointState(
+            position=torch.tensor(joint_positions, device=self.tensor_args.device).clone().detach(),
+            velocity=torch.tensor(joint_velocities, device=self.tensor_args.device).clone().detach(),
+            joint_names=joint_names
+        )
 
-            transform_matrix = translation * rotation * scale
+        world_objects_pose_offset = Pose(
+            position=torch.tensor([offset], device=self.tensor_args.device),
+            quaternion=torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.tensor_args.device).unsqueeze(0),
+            normalize_rotation=True
+        )
 
-            # Apply the transformation matrix
-            xform.AddTransformOp().Set(transform_matrix)
+        self.motion_gen.attach_objects_to_robot(
+            joint_state,
+            [closest_object],
+            sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
+            world_objects_pose_offset=world_objects_pose_offset,
+        )
 
-            # Create a cube and set its size (1.0 since scaling is handled by the matrix)
-            cuboid = UsdGeom.Cube.Define(stage, f"{cuboid_path}/Cube")
-            cuboid.GetSizeAttr().Set(1.0)
+        print(f"Object {closest_object} attached to robot.")
 
-            # Create a material and shader using UsdShade
-            material = UsdShade.Material.Define(stage, f"{cuboid_path}/Material")
-            shader = UsdShade.Shader.Define(stage, f"{cuboid_path}/Material/Shader")
-            shader.CreateIdAttr("UsdPreviewSurface")
+    def attach_object_to_robot(self, target_name, offset=[0, 0, 0.01]):
+        '''
+        Attaches the object to the robot's collision model.
+        '''
+        joint_positions, joint_velocities, joint_names = self.env.get_joint_info()
 
-            # Correctly specify the SdfValueTypeName for the color input
-            shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Float3).Set(Gf.Vec3f(1.0, 0.0, 0.0))  # Red color
-            material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+        joint_state = JointState(
+            position=joint_positions.clone().detach().to(self.tensor_args.device),
+            velocity=joint_velocities.clone().detach().to(self.tensor_args.device),
+            joint_names=joint_names
+        )
 
-            # Bind the material to the cuboid
-            UsdShade.MaterialBindingAPI(cuboid.GetPrim()).Bind(material)
+        # Create a proper quaternion for world_objects_pose_offset
+        default_quaternion = torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.tensor_args.device).unsqueeze(0)  # A default identity quaternion
 
-            print(f"Added visual cuboid for {name} at {cuboid_path}")
+        world_objects_pose_offset = Pose(
+            position=torch.tensor([offset], device=self.tensor_args.device),
+            quaternion=default_quaternion,
+            normalize_rotation=True,
+        )
 
+        self.motion_gen.attach_objects_to_robot(
+            joint_state,
+            [target_name],
+            sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
+            world_objects_pose_offset=world_objects_pose_offset,
+        )
+        print(f"Object {target_name} attached to robot.")
 
+    def detach_object_from_robot(self):
+        '''
+        Detaches any object currently attached to the robot's collision model.
+        '''
+        self.motion_gen.detach_object_from_robot()
+        print("Object detached from robot.")
 
+    def disable_collision_for_target(self, target_name):
+        '''
+        Disables collision checking for the target object.
+        '''
+        self.world_collision.enable_obstacle(target_name, False)
+        print(f"Collision disabled for target: {target_name}")
+
+    def enable_collision_for_target(self, target_name):
+        '''
+        Re-enables collision checking for the target object.
+        '''
+        self.world_collision.enable_obstacle(target_name, True)
+        print(f"Collision enabled for target: {target_name}")
+
+    def list_obstacles(self):
+        obstacle_list = self.world_collision.get_obstacle_names()
+        filtered_list = []
+        for obstacle in obstacle_list:
+            if obstacle is not None:
+                print(f"Valid obstacle found: {obstacle}")
+                filtered_list.append(obstacle)
+        return filtered_list

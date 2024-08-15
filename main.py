@@ -174,7 +174,7 @@ def main():
         env.step(action)
     env.reset()
 
-    orchestrator = Orchestrator(env, cfg)
+    orchestrator = Orchestrator(env, cfg) 
 
     # Get the scene info and then plan
     # scene_info = Orchestrator.extract_objects_and_sites_info(cfg.usd_info_path)
