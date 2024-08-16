@@ -3,11 +3,11 @@ import gymnasium as gym
 import argparse
 
 
-from models.GMM import MLP
 from tqdm import tqdm
 from utils.dataset import TrajectoryDataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard.writer import SummaryWriter
+from robomimic.models.policy_nets import GaussianActorNetwork
 
 
 def distill(name):
@@ -23,11 +23,10 @@ def distill(name):
     action_space = info["action_space"]
     action_space = gym.spaces.flatten_space(action_space).shape[0]
     obs_space = gym.spaces.flatten_space(info["obs_space"]).shape[0]
+    breakpoint()
+
     # Initialize model
-    model = MLP(
-        input_dim=obs_space,
-        output_dim=action_space
-    ).cuda()
+    # GaussianActorNetwork(
 
     optim = torch.optim.Adam(model.parameters(), lr=0.001)
 

@@ -96,7 +96,7 @@ class Action:
 @dataclass(frozen=True)
 class GraspAction(Action, action_name="grasp"):
     target: str
-    GRASP_STEPS: int = 15
+    GRASP_STEPS: int = 7
 
     def build(self, env):
         # Ensure required services are registered

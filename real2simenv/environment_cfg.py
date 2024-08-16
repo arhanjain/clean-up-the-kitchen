@@ -55,8 +55,8 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     camera = CameraCfg(
         prim_path="{ENV_REGEX_NS}/table_cam",
         update_period=0.1,
-        height=480,
-        width=640,
+        height=180,
+        width=320,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
@@ -178,6 +178,12 @@ class ObservationsCfg:
         ee_position = ObsTerm(
             func=mdp.ee_pose,
         )
+
+        rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
+        # shoulder_cam = ObsTerm(
+        #         func=mdp.camera_rgb,
+        #         )
+
         # object_position = ObsTerm(
         #     func=mdp.object_position_in_robot_root_frame,
         #     params={"object_cfg": SceneEntityCfg("Xform_266")}
@@ -186,7 +192,6 @@ class ObservationsCfg:
 
         # actions = ObsTerm(func=mdp.last_action)
         # rgb, seg, depth = ObsTerm(func=mdp.get_camera_data)
-        # rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         # seg = ObsTerm(func=mdp.get_camera_data, params={"type": "semantic_segmentation"})
         # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
 
@@ -199,6 +204,11 @@ class ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
     
     def setup(self, usd_info):
+        for name in usd_info["xforms"]:
+            setattr(self.policy, name, ObsTerm(
+                    func=mdp.object_position_in_robot_root_frame, 
+                    params={"object_cfg": SceneEntityCfg(name)}
+                    ))
         for name in usd_info["sites"]:
             setattr(self.policy, name, ObsTerm(
                     func=mdp.object_position_in_robot_root_frame, 
@@ -292,7 +302,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """Post initialization."""
         # general settings
-        self.decimation = 5 # 20 hz for control/step
+        self.decimation = 10 # 10 hz for control/step
         self.episode_length_s = 5.0
         # simulation settings
         self.sim.dt = 0.01  # 100Hz for physx

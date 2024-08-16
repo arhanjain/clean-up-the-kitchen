@@ -1,18 +1,13 @@
 import argparse
 from omni.isaac.lab.app import AppLauncher
-from wrappers.logger import DataCollector
-from datetime import datetime
 
 parser = argparse.ArgumentParser(description="test")
-parser.add_argument(
-    "--cpu", action="store_true", default=False, help="Use CPU pipeline."
-)
 parser.add_argument(
     "--disable_fabric",
     action="store_true",
     default=False, help="Disable fabric and use USD I/O operations.",) 
 parser.add_argument(
-    "--num_envs", type=int, default=None, help="Number of environments to simulate."
+    "--num_envs", type=int, default=1, help="Number of environments to simulate."
 )
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 
@@ -28,12 +23,11 @@ import torch
 import gymnasium as gym
 import real2simenv
 from omni.isaac.lab_tasks.utils import parse_env_cfg
-# from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 from omegaconf import OmegaConf
-
+from wrappers import DataCollector
+from datetime import datetime
 from planning.orchestrator import Orchestrator
-from omni.isaac.lab_tasks.utils import parse_env_cfg
 import yaml
 
 def do_nothing(env):
@@ -46,7 +40,7 @@ def do_nothing(env):
 
 def main():
     # Load configuration
-    with open("config.yml", "r") as file:
+    with open("./config/config.yml", "r") as file:
         cfg = OmegaConf.create(yaml.safe_load(file))
         # Attach USD info
         with open(cfg.usd_info_path, "r") as usd_info_file:
@@ -55,7 +49,7 @@ def main():
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
-        use_gpu=not args_cli.cpu,
+        device= args_cli.device,
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
@@ -91,20 +85,21 @@ def main():
     ]
 
     # Simulate environment
-    with torch.inference_mode():
-        while simulation_app.is_running():
-            do_nothing(env)
-            full_plan = orchestrator.generate_plan_from_template(plan_template)
+    # with torch.inference_mode():
+    # torch.set_grad_enabled(False)
+    while simulation_app.is_running():
+        # do_nothing(env)
+        full_plan = orchestrator.generate_plan_from_template(plan_template)
 
-            # ignoring using torch inference mode for now
-            interrupted = False
-            for segment in full_plan:
-                    obs, rew, done, trunc, info = env.step(segment)
-                    if done or trunc:
-                        interrupted = True
-                        break
-            if not interrupted:
-                env.reset()
+        # ignoring using torch inference mode for now
+        interrupted = False
+        for segment in full_plan:
+                obs, rew, done, trunc, info = env.step(segment)
+                if done or trunc:
+                    interrupted = True
+                    break
+        if not interrupted:
+            env.reset()
 
     env.close()
 

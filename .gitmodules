@@ -1,0 +1,3 @@
+[submodule "robomimic"]
+	path = robomimic
+	url = git@github.com:ARISE-Initiative/robomimic.git

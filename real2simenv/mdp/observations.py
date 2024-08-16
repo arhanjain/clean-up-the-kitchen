@@ -2,7 +2,6 @@
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
 from __future__ import annotations
 
 import torch
@@ -31,14 +30,14 @@ def object_position_in_robot_root_frame(
     )
     return object_pos_b
 
-# def get_camera_data(
-#     env: ManagerBasedRLEnv,
-#     camera_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
-#     type: str = "rgb"
-# ) -> torch.Tensor:
-    
-#     camera = env.scene[camera_cfg.name]
-#     return camera.data.output[type].flatten()
+def get_camera_data(
+    env: ManagerBasedRLEnv,
+    camera_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+    type: str = "rgb"
+) -> torch.Tensor:
+  
+    camera = env.scene[camera_cfg.name]
+    return camera.data.output[type]
 
 def ee_pose(
     env: ManagerBasedRLEnv,
@@ -59,5 +58,3 @@ def ee_pose(
     )
 
     return torch.cat((ee_pos_b, ee_quat_b), dim=1)
-    
-    

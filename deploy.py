@@ -2,9 +2,7 @@ import argparse
 from omni.isaac.lab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="test")
-parser.add_argument(
-    "--cpu", action="store_true", default=False, help="Use CPU pipeline."
-)
+
 parser.add_argument(
     "--disable_fabric",
     action="store_true",
@@ -13,7 +11,7 @@ parser.add_argument(
     "--num_envs", type=int, default=1, help="Number of environments to simulate."
 )
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--name", type=str, required=True, help="Name of the experiment.")
+# parser.add_argument("--name", type=str, required=True, help="Name of the experiment.")
 parser.add_argument("--checkpoint", type=str, required=True, help="Epoch to load.")
 
 
@@ -28,23 +26,25 @@ simulation_app = app_launcher.app
 import torch
 import gymnasium as gym
 import real2simenv
+import yaml
+import robomimic.utils.file_utils as FileUtils
+import h5py
+import json
+import numpy as np
+
 from omni.isaac.lab_tasks.utils import parse_env_cfg
+from omegaconf import OmegaConf
+from omni.isaac.lab_tasks.utils import parse_env_cfg
+from wrappers import DataCollector
 # from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
-from omegaconf import OmegaConf
-
-# from planning.orchestrator import Orchestrator # requires recompiling m2t2 stuff with newer torch
-from omni.isaac.lab_tasks.utils import parse_env_cfg
-from wrappers.logger import DataCollector
-import yaml
-from models.GMM import MLP
 
 def do_nothing(env):
     env.step(torch.tensor(env.action_space.sample()).to(env.unwrapped.device))
 
 def main():
     # Load configuration
-    with open("config.yml", "r") as file:
+    with open("config/config.yml", "r") as file:
         cfg = OmegaConf.create(yaml.safe_load(file))
         # Attach USD info
         with open(cfg.usd_info_path, "r") as usd_info_file:
@@ -53,7 +53,7 @@ def main():
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
-        use_gpu=not args_cli.cpu,
+        device=args_cli.device,
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
@@ -81,21 +81,42 @@ def main():
     obs, info = env.reset()
 
     # Load model
-    obs_space = gym.spaces.flatten_space(env.observation_space).shape[0]
-    action_space = gym.spaces.flatten_space(env.action_space).shape[0]
-    model = MLP(obs_space, action_space)
-    saved = torch.load(f"./runs/{args_cli.name}/model_{args_cli.checkpoint}.pth")
-    model.load_state_dict(saved["model_state_dict"])
-    model = model.to(env.unwrapped.device)
+    policy, _ = FileUtils.policy_from_checkpoint(
+            ckpt_path=args_cli.checkpoint, 
+            device=env.unwrapped.device, 
+            verbose=True)
+      
+    
+    # obs_space = gym.spaces.flatten_space(env.observation_space).shape[0]
+    # action_space = gym.spaces.flatten_space(env.action_space).shape[0]
+    # model = MLP(obs_space, action_space)
+    # saved = torch.load(f"./runs/{args_cli.name}/model_{args_cli.checkpoint}.pth")
+    # model.load_state_dict(saved["model_state_dict"])
+    # model = model.to(env.unwrapped.device)
+
+    hdf5  = h5py.File("./data/ds-2024-08-15_12-36-03/data.hdf5", "r")
+    data = hdf5["data"]
+    meta = json.loads(data.attrs["meta"])
+
+    action_min = np.array(meta["action_min"])
+    action_max = np.array(meta["action_max"])
+
+    def unnormalize_action(action):
+        # from -1,1 to min, max
+        return (action + 1) * (action_max - action_min) / 2 + action_min
+
 
     # Simulate environment
     with torch.inference_mode():
         while simulation_app.is_running():
-            obs = DataCollector.to_numpy(obs)
-            obs = gym.spaces.flatten(env.observation_space, obs)
-            obs = torch.tensor(obs, dtype=torch.float32).to(env.unwrapped.device)
-            act = model(obs)
-            obs, rew, done, trunc, info = env.step(act.unsqueeze(0))
+            # obs = DataCollector.to_numpy(obs)
+            # obs = gym.spaces.flatten(env.observation_space, obs)
+            # obs = torch.tensor(obs, dtype=torch.float32).to(env.unwrapped.device)
+            # TODO WE NEED TO UNNORMALIZE
+            act = policy(obs["policy"])
+            act = unnormalize_action(act)
+            act = torch.tensor(act, dtype=torch.float32).to(env.unwrapped.device).view(1, -1)
+            obs, rew, done, trunc, info = env.step(act)
 
     env.close()
 

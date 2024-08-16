@@ -68,7 +68,7 @@ class MotionPlanner:
         trajopt_tsteps = 16
         trim_steps = None
         max_attempts = 4
-        interpolation_dt = 0.05
+        interpolation_dt = 0.1
         motion_gen_config = MotionGenConfig.load_from_robot_config(
             robot_cfg,
             world_cfg_list,
@@ -137,6 +137,9 @@ class MotionPlanner:
 
         # Differentiate between single and batch planning
         result = None
+        # with torch.enable_grad():
+        #     self.enable_gradients(cu_js)
+        #     self.enable_gradients(ik_goal)
         if len(ik_goal) == 1:
             result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
         else: 
@@ -165,6 +168,19 @@ class MotionPlanner:
             return ee_trajs 
         else:
             raise ValueError("Invalid mode...")
+
+    @staticmethod
+    def enable_gradients(instance):
+        for attr_name in dir(instance):
+            # Exclude special attributes
+            if attr_name.startswith('__'):
+                continue
+            
+            attr_value = getattr(instance, attr_name)
+            
+            # Check if the attribute is a tensor
+            if isinstance(attr_value, torch.Tensor):
+                attr_value.requires_grad_(True) 
 
     @staticmethod
     def format_plan(plan):
