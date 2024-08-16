@@ -1,12 +1,6 @@
 
-from dataclasses import MISSING
-import torch
-import re
 import numpy as np
-import yaml
-from omni.isaac.lab.markers.visualization_markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
-import omni.isaac.lab.utils.math as math
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
@@ -35,7 +29,7 @@ from .utils import usd_utils, misc_utils
 from .sensor import SiteCfg
 
 @configclass
-class CubeSceneCfg(InteractiveSceneCfg):
+class Real2SimSceneCfg(InteractiveSceneCfg):
     """Configuration for the lift scene with a robot and a object.
     This is the abstract base implementation, the exact scene is defined in the derived classes
     which need to set the target object, robot and end-effector frames
@@ -61,8 +55,8 @@ class CubeSceneCfg(InteractiveSceneCfg):
     camera = CameraCfg(
         prim_path="{ENV_REGEX_NS}/table_cam",
         update_period=0.1,
-        height=480,
-        width=640,
+        height=180,
+        width=320,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
@@ -83,7 +77,7 @@ class CubeSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
-            debug_vis=False,
+            debug_vis=True,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
@@ -130,48 +124,6 @@ class CubeSceneCfg(InteractiveSceneCfg):
                     debug_vis=True,
                     offset=offset.tolist()
                 )
-
-
-
-        # site_pattern = r"^SiteXform_\d+$"
-        # xform_263_pos = None
-        # for entry in usd_stage.GetDefaultPrim().GetChildren()[:-1]:
-        #     name = entry.GetName()
-        #     if re.match(site_pattern, name):
-        #         # handle site
-        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-        #         transform = torch.tensor(transform)
-        #         pos, _ = misc_utils.GUI_matrix_to_pos_and_quat(transform)
-        #
-        #         offset = pos - xform_263_pos
-        #
-        #         # number = name.split("_")[-1]
-        #         objs[name] = SiteCfg(
-        #             prim_path=f"{{ENV_REGEX_NS}}/Xform_{263}",
-        #             debug_vis=True,
-        #             offset=offset
-        #         )
-        #     else:
-        #         transform = entry.GetChildren()[-1].GetAttribute("xformOp:transform").Get()
-        #         transform = torch.tensor(transform)
-        #         pos, quat = misc_utils.GUI_matrix_to_pos_and_quat(transform)
-        #         # pos, quat = (0,0,0), (1,0,0,0)
-        #         objs[name] = RigidObjectCfg(
-        #             prim_path=f"{{ENV_REGEX_NS}}/{name}",
-        #             init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-        #             spawn=usd_utils.CustomRigidUSDCfg(
-        #                 usd_path=usd_path,
-        #                 usd_sub_path=entry.GetPath().pathString,
-        #                 rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=True if name == "Xform_263" else False),
-        #                 collision_props=CollisionPropertiesCfg(),
-        #                 semantic_tags=[("class", "obj")] if name == "Xform_266" else [],
-        #             )
-        #         )
-        #
-        #         if name == "Xform_263":
-        #             xform_263_pos = pos
-        #
-        # 
 
         for k, v in objs.items():
             setattr(self, k, v)
@@ -226,6 +178,12 @@ class ObservationsCfg:
         ee_position = ObsTerm(
             func=mdp.ee_pose,
         )
+
+        rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
+        # shoulder_cam = ObsTerm(
+        #         func=mdp.camera_rgb,
+        #         )
+
         # object_position = ObsTerm(
         #     func=mdp.object_position_in_robot_root_frame,
         #     params={"object_cfg": SceneEntityCfg("Xform_266")}
@@ -234,17 +192,28 @@ class ObservationsCfg:
 
         # actions = ObsTerm(func=mdp.last_action)
         # rgb, seg, depth = ObsTerm(func=mdp.get_camera_data)
-        # rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         # seg = ObsTerm(func=mdp.get_camera_data, params={"type": "semantic_segmentation"})
         # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
 
 
         def __post_init__(self):
             self.enable_corruption = True
-            self.concatenate_terms = True
+            self.concatenate_terms = False
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    
+    def setup(self, usd_info):
+        for name in usd_info["xforms"]:
+            setattr(self.policy, name, ObsTerm(
+                    func=mdp.object_position_in_robot_root_frame, 
+                    params={"object_cfg": SceneEntityCfg(name)}
+                    ))
+        for name in usd_info["sites"]:
+            setattr(self.policy, name, ObsTerm(
+                    func=mdp.object_position_in_robot_root_frame, 
+                    params={"object_cfg": SceneEntityCfg(name)}
+                    ))
 
 
 @configclass
@@ -315,11 +284,11 @@ class CurriculumCfg:
 
 
 @configclass
-class CubeEnvCfg(ManagerBasedRLEnvCfg):
+class Real2SimCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # # Scene settings
-    scene: CubeSceneCfg = CubeSceneCfg(num_envs=4, env_spacing=3)
+    scene = Real2SimSceneCfg(num_envs=4, env_spacing=3)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -333,10 +302,10 @@ class CubeEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """Post initialization."""
         # general settings
-        self.decimation = 2
+        self.decimation = 10 # 10 hz for control/step
         self.episode_length_s = 5.0
         # simulation settings
-        self.sim.dt = 0.01  # 100Hz
+        self.sim.dt = 0.01  # 100Hz for physx
 
         self.sim.physx.bounce_threshold_velocity = 0.2
         self.sim.physx.bounce_threshold_velocity = 0.01

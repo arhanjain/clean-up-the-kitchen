@@ -1,5 +1,18 @@
-usd_info_path: "./data/weirdlab_xform_mapping.yml"
+usd_info_path: "./data/bowl2sink_xform_mapping.yml"
 log_dir: "./logs"
+data:
+  collect_data: true
+  max_episodes: 100
+video:
+  enabled: false
+  viewer_resolution: [320, 240]
+  viewer_eye: [-4.2, -2.5, 2.0]
+  viewer_lookat: [3.8, 2.7, -1.2]
+  video_folder: "videos"
+  save_steps: 2500
+  video_length: 250
+
+
 
 sb3:
   seed: 42
@@ -25,16 +38,6 @@ sb3:
         activation_fn=nn.ReLU,
         net_arch=dict(pi=[256, 256], vf=[256, 256])
     )
-
-video:
-  enabled: false
-  viewer_resolution: [320, 240]
-  viewer_eye: [-4.2, -2.5, 2.0]
-  viewer_lookat: [3.8, 2.7, -1.2]
-  video_folder: "videos"
-  save_steps: 2500
-  video_length: 250
-
 
 
 ###############################################################################

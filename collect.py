@@ -3,16 +3,11 @@ from omni.isaac.lab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="test")
 parser.add_argument(
-    "--cpu", action="store_true", default=False, help="Use CPU pipeline."
-)
-parser.add_argument(
     "--disable_fabric",
     action="store_true",
-    default=False,
-    help="Disable fabric and use USD I/O operations.",
-)
+    default=False, help="Disable fabric and use USD I/O operations.",) 
 parser.add_argument(
-    "--num_envs", type=int, default=None, help="Number of environments to simulate."
+    "--num_envs", type=int, default=1, help="Number of environments to simulate."
 )
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 
@@ -24,52 +19,37 @@ simulation_app = app_launcher.app
 
 ########################################
 
-import os
 import torch
-import numpy as np
 import gymnasium as gym
-import customenv
+import real2simenv
 from omni.isaac.lab_tasks.utils import parse_env_cfg
-from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
-import omni.isaac.lab.sim as sim_utils
-from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 
-from customenv import TestWrapper
 from omegaconf import OmegaConf
-from m2t2.m2t2 import M2T2
-
-from stable_baselines3 import PPO
-from stable_baselines3.common.logger import configure
-from stable_baselines3.common.callbacks import CheckpointCallback
-from planning.orchestrator import Orchestrator
-from customenv import TestWrapper
-from omni.isaac.lab_tasks.utils import parse_env_cfg
-from omni.isaac.lab_tasks.utils.wrappers.sb3 import process_sb3_cfg, Sb3VecEnvWrapper
+from wrappers import DataCollector
 from datetime import datetime
-import hydra
+from planning.orchestrator import Orchestrator
 import yaml
 
 def do_nothing(env):
-    ee_frame_sensor = env.unwrapped.scene["ee_frame"]
-    tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
-    tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
-    gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
-    action = torch.cat([tcp_rest_position, tcp_rest_orientation, gripper], dim=-1)
-    for _ in range(10):
-        env.step(action)
+    # ee_frame_sensor = env.unwrapped.scene["ee_frame"]
+    # tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
+    # tcp_rest_orientation = ee_frame_sensor.data.target_quat_w[..., 0, :].clone()
+    # gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+    # action = torch.cat([tcp_rest_position, tcp_rest_orientation, gripper], dim=-1)
+    env.step(torch.tensor(env.action_space.sample()).to(env.unwrapped.device))
 
 def main():
     # Load configuration
-    with open("config.yml", "r") as file:
+    with open("./config/config.yml", "r") as file:
         cfg = OmegaConf.create(yaml.safe_load(file))
         # Attach USD info
         with open(cfg.usd_info_path, "r") as usd_info_file:
             cfg.usd_info = yaml.safe_load(usd_info_file)
 
     # create environment configuration
-    env_cfg = parse_env_cfg(
+    env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
-        use_gpu=not args_cli.cpu,
+        device= args_cli.device,
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
@@ -83,20 +63,20 @@ def main():
     video_kwargs = viewer_cfg
 
     # create environment
-    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
+    env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
+
     # apply wrappers
-    env = TestWrapper(env)
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
+    if cfg.data.collect_data:
+        env = DataCollector(env, cfg.data, save_dir=f"data/ds-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
 
     # Reset environment
-    obs, info = env.reset()
+    env.reset()
 
     # Temp fix to image rendering, so that it captures RGB correctly before entering.
-    for _ in range(10):
-        action = torch.tensor(env.action_space.sample()).to(env.device)
-        env.step(action)
-    obs, info = env.reset()
+    do_nothing(env)
+    env.reset()
 
 
     orchestrator = Orchestrator(env, cfg)
@@ -105,14 +85,22 @@ def main():
     ]
 
     # Simulate environment
+    # with torch.inference_mode():
+    # torch.set_grad_enabled(False)
     while simulation_app.is_running():
-        do_nothing(env)
+        # do_nothing(env)
         full_plan = orchestrator.generate_plan_from_template(plan_template)
 
         # ignoring using torch inference mode for now
+        interrupted = False
         for segment in full_plan:
-            env.step(segment)
-        env.reset()
+                obs, rew, done, trunc, info = env.step(segment)
+                if done or trunc:
+                    interrupted = True
+                    break
+        if not interrupted:
+            env.reset()
+
     env.close()
 
 
