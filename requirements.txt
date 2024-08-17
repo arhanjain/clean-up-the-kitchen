@@ -1,0 +1,238 @@
+absl-py==2.1.0
+addict==2.4.0
+antlr4-python3-runtime==4.9.3
+anyio==4.4.0
+array_record==0.5.1
+asttokens @ file:///home/conda/feedstock_root/build_artifacts/asttokens_1698341106958/work
+astunparse==1.6.3
+attrs==23.2.0
+blinker==1.8.2
+boto3==1.34.149
+botocore==1.34.149
+certifi==2024.7.4
+chardet==5.2.0
+charset-normalizer==3.3.2
+click==8.1.7
+cloudpickle==3.0.0
+cmake==3.30.1
+colorlog==6.8.2
+comm==0.2.2
+ConfigArgParse==1.7
+contourpy==1.2.1
+cycler==0.12.1
+dash==2.17.1
+dash-core-components==2.0.0
+dash-html-components==2.0.0
+dash-table==5.0.0
+debugpy @ file:///home/conda/feedstock_root/build_artifacts/debugpy_1719378659226/work
+decorator==4.4.2
+dm-env==1.6
+dm-tree==0.1.8
+docker-pycreds==0.4.0
+docstring_parser==0.16
+egl_probe==1.0.2
+embreex==2.17.7.post5
+envlogger==1.2
+etils==1.7.0
+exceptiongroup==1.2.2
+executing @ file:///home/conda/feedstock_root/build_artifacts/executing_1698579936712/work
+Farama-Notifications==0.0.4
+fastjsonschema==2.20.0
+filelock==3.13.1
+Flask==3.0.3
+flatbuffers==24.3.25
+fonttools==4.53.1
+fsspec==2024.2.0
+gast==0.6.0
+gitdb==4.0.11
+GitPython==3.1.43
+google-pasta==0.2.0
+grpcio==1.65.1
+gym==0.23.1
+gym-notices==0.0.8
+gymnasium==0.29.0
+h11==0.14.0
+h5py==3.11.0
+hidapi==0.14.0.post2
+httpcore==1.0.5
+httpx==0.27.0
+hydra-core==1.3.2
+idna==3.7
+imageio==2.34.2
+imageio-ffmpeg==0.5.1
+immutabledict==4.2.0
+importlib_metadata @ file:///home/conda/feedstock_root/build_artifacts/importlib-metadata_1721856510709/work
+importlib_resources==6.4.0
+ipykernel @ file:///home/conda/feedstock_root/build_artifacts/ipykernel_1719845459717/work
+ipython @ file:///home/conda/feedstock_root/build_artifacts/ipython_1719582526268/work
+ipywidgets==8.1.3
+isaacsim-app==4.1.0.0
+isaacsim-benchmark==4.1.0.0
+isaacsim-core==4.1.0.0
+isaacsim-extscache-kit==4.1.0.0
+isaacsim-extscache-kit-sdk==4.1.0.0
+isaacsim-extscache-physics==4.1.0.0
+isaacsim-gui==4.1.0.0
+isaacsim-kernel==4.1.0.0
+isaacsim-replicator==4.1.0.0
+isaacsim-rl==4.1.0.0
+isaacsim-robot==4.1.0.0
+isaacsim-robot-motion==4.1.0.0
+isaacsim-sensor==4.1.0.0
+isaacsim-storage==4.1.0.0
+isaacsim-utils==4.1.0.0
+itsdangerous==2.2.0
+jedi @ file:///home/conda/feedstock_root/build_artifacts/jedi_1696326070614/work
+Jinja2==3.1.3
+jmespath==1.0.1
+joblib==1.4.2
+jsonschema==4.23.0
+jsonschema-specifications==2023.12.1
+jupyter_client @ file:///home/conda/feedstock_root/build_artifacts/jupyter_client_1716472197302/work
+jupyter_core==5.7.2
+jupyterlab_widgets==3.0.11
+keras==3.4.1
+kiwisolver==1.4.5
+lazy_loader==0.4
+libclang==18.1.1
+lit==18.1.8
+lxml==5.2.2
+m2t2 @ file:///home/arhan/projects/M2T2
+manifold3d==2.5.1
+Markdown==3.6
+markdown-it-py==3.0.0
+MarkupSafe==2.1.5
+matplotlib==3.9.1
+matplotlib-inline @ file:///home/conda/feedstock_root/build_artifacts/matplotlib-inline_1713250518406/work
+mdurl==0.1.2
+meshcat==0.3.2
+ml-dtypes==0.4.0
+moviepy==1.0.3
+mpmath==1.3.0
+namex==0.0.8
+nbformat==5.10.4
+nest_asyncio @ file:///home/conda/feedstock_root/build_artifacts/nest-asyncio_1705850609492/work
+networkx==3.2.1
+ninja==1.11.1.1
+numpy==1.26.4
+numpy-quaternion==2023.0.4
+nvidia-cublas-cu11==11.11.3.6
+nvidia-cuda-cupti-cu11==11.8.87
+nvidia-cuda-nvrtc-cu11==11.8.89
+nvidia-cuda-runtime-cu11==11.8.89
+nvidia-cudnn-cu11==9.1.0.70
+nvidia-cufft-cu11==10.9.0.58
+nvidia-curand-cu11==10.3.0.86
+nvidia-cusolver-cu11==11.4.1.48
+nvidia-cusparse-cu11==11.7.5.86
+nvidia-nccl-cu11==2.20.5
+nvidia-nvtx-cu11==11.8.86
+-e git+ssh://git@github.com/NVlabs/curobo.git@3690d28c54ee4ba23e2d7cc03a89a5845e4f9546#egg=nvidia_curobo
+omegaconf==2.3.0
+-e git+ssh://git@github.com/isaac-sim/IsaacLab.git@7379dceebdc95acdfcdb51be3b1271546a5ad21a#egg=omni_isaac_lab&subdirectory=source/extensions/omni.isaac.lab
+-e git+ssh://git@github.com/isaac-sim/IsaacLab.git@7379dceebdc95acdfcdb51be3b1271546a5ad21a#egg=omni_isaac_lab_assets&subdirectory=source/extensions/omni.isaac.lab_assets
+-e git+ssh://git@github.com/isaac-sim/IsaacLab.git@7379dceebdc95acdfcdb51be3b1271546a5ad21a#egg=omni_isaac_lab_tasks&subdirectory=source/extensions/omni.isaac.lab_tasks
+omniverse-kit==106.0.1.126909
+onnx==1.16.1
+open3d==0.18.0
+opencv-python==4.10.0.84
+opt-einsum==3.3.0
+optree==0.12.1
+osqp==0.6.7.post1
+packaging @ file:///home/conda/feedstock_root/build_artifacts/packaging_1718189413536/work
+pandas==2.2.2
+parso @ file:///home/conda/feedstock_root/build_artifacts/parso_1712320355065/work
+pathtools==0.1.2
+pexpect @ file:///home/conda/feedstock_root/build_artifacts/pexpect_1706113125309/work
+pickleshare @ file:///home/conda/feedstock_root/build_artifacts/pickleshare_1602536217715/work
+pillow==10.4.0
+platformdirs==4.2.2
+plotly==5.22.0
+pointnet2_ops @ file:///home/arhan/projects/M2T2/pointnet2_ops
+prettytable==3.3.0
+proglog==0.1.10
+promise==2.3
+prompt_toolkit @ file:///home/conda/feedstock_root/build_artifacts/prompt-toolkit_1718047967974/work
+protobuf==3.20.3
+psutil==5.9.8
+ptyprocess @ file:///home/conda/feedstock_root/build_artifacts/ptyprocess_1609419310487/work/dist/ptyprocess-0.7.0-py2.py3-none-any.whl
+pure_eval @ file:///home/conda/feedstock_root/build_artifacts/pure_eval_1721585709575/work
+pyarrow==17.0.0
+pybind11==2.13.1
+pycollada==0.8
+pyglet==1.5.29
+Pygments @ file:///home/conda/feedstock_root/build_artifacts/pygments_1714846767233/work
+pyngrok==7.2.0
+pyparsing==3.1.2
+pyperclip==1.9.0
+pyquaternion==0.9.9
+python-dateutil==2.9.0.post0
+pytz==2024.1
+PyYAML==6.0.1
+pyzmq @ file:///home/conda/feedstock_root/build_artifacts/pyzmq_1715024398995/work
+qdldl==0.1.7.post4
+referencing==0.35.1
+requests==2.32.3
+retrying==1.3.4
+rich==13.7.1
+rl_games==1.6.1
+-e git+ssh://git@github.com/ARISE-Initiative/robomimic.git@4690f3ecfa658e1848b2e3fcf8dc2db350f9ffb9#egg=robomimic&subdirectory=../../robomimic
+rpds-py==0.19.1
+rsl_rl @ git+https://github.com/leggedrobotics/rsl_rl.git@a1d25d1fef4d10037dfae155c0ed5e68fdec25a5
+Rtree==1.3.0
+s3transfer==0.10.2
+scikit-image==0.24.0
+scikit-learn==1.5.1
+scipy==1.14.0
+sentry-sdk==2.11.0
+setproctitle==1.3.3
+setuptools-scm==8.1.0
+shapely==2.0.5
+shortuuid==1.0.13
+simple_parsing==0.1.5
+six @ file:///home/conda/feedstock_root/build_artifacts/six_1620240208055/work
+skrl==1.2.0
+smmap==5.0.1
+sniffio==1.3.1
+stable_baselines3==2.3.2
+stack-data @ file:///home/conda/feedstock_root/build_artifacts/stack_data_1669632077133/work
+svg.path==6.3
+sympy==1.12
+tenacity==8.5.0
+tensorboard==2.17.0
+tensorboard-data-server==0.7.2
+tensorboardX==2.6.2.2
+tensordict==0.3.2
+tensorflow==2.17.0
+tensorflow-io-gcs-filesystem==0.37.1
+tensorflow-metadata==1.15.0
+termcolor==2.4.0
+tfds-nightly==4.9.6.dev202408120044
+threadpoolctl==3.5.0
+tifffile==2024.7.24
+toml==0.10.2
+tomli==2.0.1
+torch==2.4.0+cu118
+torchaudio==2.4.0+cu118
+torchvision==0.19.0+cu118
+tornado @ file:///home/conda/feedstock_root/build_artifacts/tornado_1717722796999/work
+tqdm==4.66.4
+traitlets==5.14.3
+trimesh==4.4.3
+triton==3.0.0
+typing_extensions==4.12.2
+tzdata==2024.1
+u-msgpack-python==2.8.0
+urllib3==2.2.2
+usd-core==24.8
+vhacdx==0.0.8.post1
+wandb==0.12.21
+warp-lang==1.2.2
+wcwidth @ file:///home/conda/feedstock_root/build_artifacts/wcwidth_1704731205417/work
+Werkzeug==3.0.3
+widgetsnbextension==4.0.11
+wrapt==1.16.0
+xatlas==0.0.9
+xxhash==3.4.1
+yourdfpy==0.0.56
+zipp @ file:///home/conda/feedstock_root/build_artifacts/zipp_1718013267051/work
