@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 @configclass
 class SiteData:
-    site_pos_w: torch.Tensor | None = None
-    site_quat_w: torch.Tensor | None = None
+    root_pos_w: torch.Tensor | None = None
+    root_quat_w: torch.Tensor | None = None
 
 
 class Site(SensorBase):
@@ -37,8 +37,8 @@ class Site(SensorBase):
         self._physics_sim_view.set_subspace_roots("/")
         self._obj_physx_view = self._physics_sim_view.create_rigid_body_view(obj_name_regex.replace(".*", "*"))
 
-        self._data.site_pos_w = torch.zeros(self._num_envs, 3, device=self._device)
-        self._data.site_quat_w = torch.zeros(self._num_envs, 4, device=self._device)
+        self._data.root_pos_w = torch.zeros(self._num_envs, 3, device=self._device)
+        self._data.root_quat_w = torch.zeros(self._num_envs, 4, device=self._device)
 
     def _update_buffers_impl(self, env_ids: Sequence[int]):
         
@@ -48,8 +48,8 @@ class Site(SensorBase):
 
         offset = torch.tensor(self.cfg.offset, device=self._device).repeat(self._num_envs, 1)
 
-        self._data.site_pos_w = transforms[:, :3] + offset
-        self._data.site_quat_w = transforms[:, 3:]
+        self._data.root_pos_w = transforms[:, :3] + offset
+        self._data.root_quat_w = transforms[:, 3:]
 
     def _set_debug_vis_impl(self, debug_vis: bool):
         # set visibility of markers
@@ -76,6 +76,6 @@ class Site(SensorBase):
     def _debug_vis_callback(self, event):
         # Update the visualized markers
         if self.frame_visualizer is not None:
-            self.frame_visualizer.visualize(self._data.site_pos_w.view(-1, 3), self._data.site_quat_w.view(-1, 4))
+            self.frame_visualizer.visualize(self._data.root_pos_w.view(-1, 3), self._data.root_quat_w.view(-1, 4))
 
 

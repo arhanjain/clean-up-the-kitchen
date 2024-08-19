@@ -113,5 +113,6 @@ if __name__ == "__main__":
 
 
     usd_name = args.usd_path.split("/")[-1].split(".")[0]
+    print(f"Saving mapping to ./data/{usd_name}_xform_mapping.yml")
     with open(f"./data/{usd_name}_xform_mapping.yml", "w") as f:
         yaml.dump(mapping, f)

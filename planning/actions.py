@@ -1,6 +1,5 @@
-from os import WSTOPSIG
-from numpy import who
 import torch
+import numpy as np
 
 from enum import Enum
 from abc import abstractmethod
@@ -9,6 +8,10 @@ from dataclasses import dataclass
 from planning.grasp import Grasper
 from planning.motion_planner import MotionPlanner
 from curobo.util.usd_helper import UsdHelper
+from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
+import omni.isaac.lab.sim as sim_utils
+from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
+import omni.isaac.lab.utils.math as math
 
 class ServiceName(Enum):
     GRASPER = "grasper"
@@ -94,7 +97,7 @@ class Action:
 @dataclass(frozen=True)
 class GraspAction(Action, action_name="grasp"):
     target: str
-    GRASP_STEPS: int = 30
+    GRASP_STEPS: int = 7
 
     def build(self, env):
         # Ensure required services are registered
@@ -154,62 +157,43 @@ class GraspAction(Action, action_name="grasp"):
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
 
-
 @dataclass(frozen=True)
-class PlaceAction(Action, action_name="place"):
+class ReachAction(Action, action_name="reach"):
     target: str
-    GRASP_STEPS: int = 30
 
     def build(self, env):
         # Ensure required services are registered
-        grasper: Grasper = Action.get_service(ServiceName.GRASPER)
         planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
-        if grasper is None:
-            raise ValueError("Grasper service not found")
         if planner is None:
             raise ValueError("Motion planner service not found")
-        
-        # Technically unnecesarry since it's already attached to the robot.
-        # planner.disable_collision_for_target(self.target)
+
+        # grasp marker
+        marker_cfg = VisualizationMarkersCfg(
+         prim_path="/Visuals/graspviz",
+         markers={
+             "frame": sim_utils.UsdFileCfg(
+                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
+                 scale=(0.05, 0.05, 0.05),
+             ),
+         }
+        )
+        marker = VisualizationMarkers(marker_cfg)
 
         # Find successful plan
-        traj = None
-        while traj is None:
-            # Get place pose
-            # success = torch.zeros(env.unwrapped.num_envs)
-            # place_pose = None
-            # while not torch.all(success):
-            #     place_pose, success = grasper.get_placement(env, self.target)
-            
-            place_pose = grasper.get_placement(env, self.target)
-            # Get pregrasp pose
-            preplace_pose = grasper.get_prepose(place_pose, 0.1)
-            # Plan motion to pregrasp
-            traj = planner.plan(preplace_pose, mode="ee_pose")
-        
-        # Go to preplace pose
-        gripper_action = -1 * torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
-        traj = torch.cat((traj, gripper_action), dim=2)
+        target_pos = env.unwrapped.scene[self.target].data.root_pos_w
+        # target_quat = env.unwrapped.scene[self.target].data.root_quat_w
+        quat = math.quat_from_euler_xyz(torch.tensor([np.pi]), torch.tensor([0]), torch.tensor([0]))
+        target_pose = torch.cat((target_pos, quat.to(0)), dim=1)
+
+        marker.visualize(target_pose[:,:3], target_pose[:, 3:])
+
+        traj = planner.plan(target_pose, mode="ee_pose")
+        if traj is None:
+            return 
+
         for pose_idx in range(traj.shape[1]):
-            yield traj[:, pose_idx]
-        # Go to place pose
-        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1)
-        go_to_grasp = torch.cat((place_pose, closed_gripper), dim=1).to(env.unwrapped.device)
-        for _ in range(self.GRASP_STEPS):
-            yield go_to_grasp
+            yield traj[: pose_idx]
 
-        # open gripper
-        opened_gripper = torch.ones(env.unwrapped.num_envs, 1)
-        open_gripper = torch.cat((place_pose, opened_gripper), dim=1).to(env.unwrapped.device)
-        for _ in range(self.GRASP_STEPS):
-            yield open_gripper
 
-        # Detach from robot once it has been dropped
-        planner.detach_object_from_robot()
-        # planner.enable_collision_for_target(self.target)
-        
-        # Go to pregrasp pose
-        go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)
-        for _ in range(self.GRASP_STEPS):
-            yield go_to_pregrasp
+
 

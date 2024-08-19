@@ -1,4 +1,3 @@
-import math
 from PIL import Image
 from sklearn.neighbors import KDTree
 from torch.utils.data import Dataset

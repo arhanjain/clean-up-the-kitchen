@@ -1,12 +1,15 @@
 # clean-up-the-kitchen
 
-1. Uncompress `data` folder into top level directory
-2. Run `python main.py --task Cube-Test-v0 --num_envs 1
-3. Install the OpenAI package:
-    ```bash
-    pip install openai
-    ```
-4. Go to [OpenAI API Keys](https://platform.openai.com/api-keys) and run this command:
-    ```bash
-    export OPENAI_API_KEY='your-api-key-here'
-    ```
+1. Clone this repo!
+2. Create conda/mamba environment with `conda create -n real2sim python=3.10` or `micromamba create -n real2sim python=3.10`
+3. Activate the environment: `conda activate real2sim`
+4. Install dependencies using requirements file. `pip install -r ./requirements.txt`
+5. Go to `https://github.com/arhanjain/M2T2`, clone it anywhere, and follow the README instructions there to install M2T2
+6. Go to `https://curobo.org/get_started/1_install_instructions.html#install-for-use-in-isaac-sim` and install CuRobo
+7. Make a `data` folder and add the *usdz* file sent by @arhanjain into the `data` directory
+8. Run `python scripts/xform_mapper.py --usd_path [PATH_TO_USDZ]`
+9. Open `config/config.yml` and replace the **usd_info_path** with the output path of file produced by step 4.
+10. Run `python collect.py --task Real2Sim`
+
+**If you reach this point, you have now at least begun data collection successfully. For next steps, reach out to Arhan.**
+

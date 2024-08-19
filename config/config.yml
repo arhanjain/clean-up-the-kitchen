@@ -1,5 +1,18 @@
-usd_info_path: "./data/cluttered2_xform_mapping.yml"
+usd_info_path: "./data/bowl2sink_xform_mapping.yml"
 log_dir: "./logs"
+data:
+  collect_data: true
+  max_episodes: 100
+video:
+  enabled: false
+  viewer_resolution: [320, 240]
+  viewer_eye: [-4.2, -2.5, 2.0]
+  viewer_lookat: [3.8, 2.7, -1.2]
+  video_folder: "videos"
+  save_steps: 2500
+  video_length: 250
+
+
 
 sb3:
   seed: 42
@@ -26,16 +39,6 @@ sb3:
         net_arch=dict(pi=[256, 256], vf=[256, 256])
     )
 
-video:
-  enabled: false
-  viewer_resolution: [320, 240]
-  viewer_eye: [-4.2, -2.5, 2.0]
-  viewer_lookat: [3.8, 2.7, -1.2]
-  video_folder: "videos"
-  save_steps: 2500
-  video_length: 250
-
-
 
 ###############################################################################
 # GRASP CONFIG START
@@ -54,8 +57,6 @@ grasp:
     robot_prob: 1.0
     offset_bins: [0, 0.00794435329, 0.0158887021, 0.0238330509, 0.0317773996, 0.0397217484, 0.0476660972, 0.055610446, 0.0635547948, 0.0714991435, 0.08]
     synthetic_pcd: false
-    num_sample_points: 25_000
-    num_sample_obj_points: 10_000
 
   m2t2:
     scene_encoder:
@@ -153,7 +154,7 @@ grasp:
 
   eval:
     data_dir: ''
-    checkpoint: '/home/jacob/projects/clean-up-the-kitchen/M2T2/m2t2.pth'
+    checkpoint: '/home/arhan/Downloads/m2t2.pth'
     mask_thresh: 0.4
     object_thresh: 0.4
     num_runs: 1

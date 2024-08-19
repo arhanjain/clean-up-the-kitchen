@@ -4,6 +4,8 @@ videos/
 logs/
 pyrightconfig.json
 pyproject.toml
+*.ipynb
+runs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
