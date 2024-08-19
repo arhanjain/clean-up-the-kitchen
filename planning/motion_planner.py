@@ -40,15 +40,15 @@ class MotionPlanner:
         The environment to plan in.
     '''
     def __init__(self, env):
-        usd_help = UsdHelper()
+        self.usd_help = UsdHelper()
 
-        usd_help.load_stage(env.scene.stage)
+        self.usd_help.load_stage(env.scene.stage)
         offset = 2.5
         pose = Pose.from_list([0,0,0,1,0,0,0])
 
         for i in range(env.num_envs):
-            usd_help.add_subroot("/World", f"/World/world_{i}", pose)
-            pose.position[0,1] += offset
+            self.usd_help.add_subroot("/World", f"/World/world_{i}", pose)
+            # pose.position[0,1] += offset
 
         self.tensor_args = TensorDeviceType()
 
@@ -59,12 +59,22 @@ class MotionPlanner:
     
         world_cfg_list = []
         for i in range(env.num_envs):
-            world_cfg = WorldConfig.from_dict(
+            world_cfg_table = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            # usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            world_cfg_table.cuboid[0].pose[2] -= 0.01
+            world_cfg1 = WorldConfig.from_dict(
+                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+            ).get_mesh_world()
+            for mesh in world_cfg1.mesh:
+                mesh.name += "_mesh"
+                mesh.pose[2] = -10.5  # Adjust the pose as needed
+            # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
             world_cfg_list.append(world_cfg)
+            # self.usd_help.add_world_to_stage(world_cfg, base_frame="/World")
 
+        print(join_path(get_world_configs_path(), "collision_table.yml"))
         trajopt_dt = None
         optimize_dt = True
         trajopt_tsteps = 16
@@ -78,7 +88,7 @@ class MotionPlanner:
             collision_checker_type=CollisionCheckerType.MESH,
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
-            collision_cache={"obb": 30, "mesh": 100},
+            collision_cache={"obb": 5, "mesh": 0},
         )
 
         self.motion_gen = MotionGen(motion_gen_config)
@@ -94,7 +104,7 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        # usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        # self.usd_help.add_world_to_stage(world_cfg, base_frame="/World")
         self.device = env.device
 
         # Forward kinematics
@@ -194,16 +204,14 @@ class MotionPlanner:
     def attach_closest_object_to_robot(self, ee_position, offset=[0, 0, 0.01]):
         '''
         Attaches the closest object to the robot's collision model after calculating the distance
-        from the pregrasp pose.
+        from the grasp pose.
         '''
-        # Get the current end-effector position from the pregrasp pose
-
         # Get a list of obstacles
         obstacle_list = self.list_obstacles()
         closest_object = None
         min_distance = float('inf')
-        # Calculate distance to each object
 
+        # Calculate distance to each object
         for obstacle in obstacle_list:
             if obstacle is not None:
                 obstacle_position = torch.tensor(self.world_collision.world_model.get_obstacle(obstacle).pose[:3]).to(ee_position.device)
@@ -227,20 +235,16 @@ class MotionPlanner:
             joint_names=joint_names
         )
 
-        world_objects_pose_offset = Pose(
-            position=torch.tensor([offset], device=self.tensor_args.device),
-            quaternion=torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.tensor_args.device).unsqueeze(0),
-            normalize_rotation=True
-        )
-
         self.motion_gen.attach_objects_to_robot(
             joint_state,
             [closest_object],
             sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
-            world_objects_pose_offset=world_objects_pose_offset,
+            world_objects_pose_offset=Pose.from_list([0, 0, 0.01, 1, 0, 0, 0], self.tensor_args),
         )
 
         print(f"Object {closest_object} attached to robot.")
+        return closest_object
+
 
     def attach_object_to_robot(self, target_name, offset=[0, 0, 0.01]):
         '''
@@ -250,12 +254,11 @@ class MotionPlanner:
 
         joint_state = JointState(
             position=joint_positions.clone().detach().to(self.tensor_args.device),
-            velocity=joint_velocities.clone().detach().to(self.tensor_args.device),
+            velocity=joint_velocities.clone().detach().to(self.tensor_args.device) * 0.0,
             joint_names=joint_names
         )
 
-        # Create a proper quaternion for world_objects_pose_offset
-        default_quaternion = torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.tensor_args.device).unsqueeze(0)  # A default identity quaternion
+        default_quaternion = torch.tensor([0.0, 0.0, 0.0, 1.0], device=self.tensor_args.device).unsqueeze(0)
 
         world_objects_pose_offset = Pose(
             position=torch.tensor([offset], device=self.tensor_args.device),
@@ -300,3 +303,20 @@ class MotionPlanner:
                 print(f"Valid obstacle found: {obstacle}")
                 filtered_list.append(obstacle)
         return filtered_list
+    
+    def update(self, obstacles) -> None:
+        # obstacles = self.usd_help.get_obstacles_from_stage(
+        #         # only_paths=[obstacles_path],
+        #         reference_prim_path="/World/envs/env_0",
+        #         ignore_substring=[
+        #             "Robot",
+        #             "sink",
+        #             f"{target}",
+        #         ],
+        #     ).get_collision_check_world()
+        #     # print(len(obstacles.objects))
+
+        # self.motion_gen.update_world(obstacles)
+        # self.world_cfg = obstacles
+        self.world_cfg = WorldConfig(cuboid=obstacles)
+        self.motion_gen.update_world(self.world_cfg)
