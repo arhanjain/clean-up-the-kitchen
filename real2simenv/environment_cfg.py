@@ -303,7 +303,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 10 # 10 hz for control/step
-        self.episode_length_s = 5.0
+        self.episode_length_s = 100.0
         # simulation settings
         self.sim.dt = 0.01  # 100Hz for physx
 

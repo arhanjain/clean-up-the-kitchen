@@ -62,17 +62,24 @@ class MotionPlanner:
             world_cfg_table = WorldConfig.from_dict(
                 load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             )
-            world_cfg_table.cuboid[0].pose[2] -= 0.01
-            world_cfg1 = WorldConfig.from_dict(
-                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
-            ).get_mesh_world()
-            for mesh in world_cfg1.mesh:
-                mesh.name += "_mesh"
-                mesh.pose[2] = -10.5  # Adjust the pose as needed
+            # world_cfg_table.cuboid[0].pose[2] -= 0.01
+
+            # # With meshes
+            # world_cfg1 = WorldConfig.from_dict(
+            #     load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+            # ).get_mesh_world()
+            # for mesh in world_cfg1.mesh:
+            #     mesh.name += "_mesh"
+                # mesh.pose[2] = -10.5  # Adjust the pose as needed
             # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
-            world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
-            world_cfg_list.append(world_cfg)
-            # self.usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+            # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
+            self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
+            world_cfg_list.append(self.world_cfg)
+            
+
+            # Without meshes
+            # world_cfg_list.append(self.world_cfg)
+        # self.usd_help.add_world_to_stage(self.world_cfg, base_frame="/World")
 
         print(join_path(get_world_configs_path(), "collision_table.yml"))
         trajopt_dt = None
@@ -88,11 +95,10 @@ class MotionPlanner:
             collision_checker_type=CollisionCheckerType.MESH,
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
-            collision_cache={"obb": 5, "mesh": 0},
+            collision_cache={"obb": 20, "mesh": 10},
         )
 
         self.motion_gen = MotionGen(motion_gen_config)
-        self.world_collision = self.motion_gen.world_coll_checker
         # print("warming up...")
         # self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
         print("Curobo is ready!")
@@ -222,19 +228,18 @@ class MotionPlanner:
         Attaches the closest object to the robot's collision model after calculating the distance
         from the grasp pose.
         '''
-        # Get a list of obstacles
         obstacle_list = self.list_obstacles()
         closest_object = None
         min_distance = float('inf')
 
-        # Calculate distance to each object
         for obstacle in obstacle_list:
-            if obstacle is not None:
-                obstacle_position = torch.tensor(self.world_collision.world_model.get_obstacle(obstacle).pose[:3]).to(ee_position.device)
-                distance = torch.norm(ee_position - obstacle_position)
-                print(obstacle, distance)
+            obstacle_data = self.motion_gen.world_model.get_obstacle(obstacle)
 
-                # Check if this object is the closest
+            if obstacle_data is not None:
+                obstacle_position = torch.tensor(obstacle_data.pose[:3]).to(ee_position.device)
+                distance = torch.norm(ee_position - obstacle_position)
+                print(f"{obstacle}: {distance}")
+
                 if distance < min_distance:
                     min_distance = distance
                     closest_object = obstacle
@@ -242,12 +247,13 @@ class MotionPlanner:
         if closest_object is None:
             raise ValueError("No valid obstacles found.")
 
-        # Attach the closest object to the robot
         joint_positions, joint_velocities, joint_names = self.env.get_joint_info()
 
         joint_state = JointState(
-            position=torch.tensor(joint_positions, device=self.tensor_args.device).clone().detach(),
-            velocity=torch.tensor(joint_velocities, device=self.tensor_args.device).clone().detach(),
+            position=joint_positions.clone().detach() * 0.0,
+            velocity=joint_velocities.clone().detach() * 0.0,
+            acceleration=joint_velocities.clone().detach() * 0.0,
+            jerk=joint_velocities.clone().detach() * 0.0,
             joint_names=joint_names
         )
 
@@ -260,7 +266,6 @@ class MotionPlanner:
 
         print(f"Object {closest_object} attached to robot.")
         return closest_object
-
 
     def attach_object_to_robot(self, target_name, offset=[0, 0, 0.01]):
         '''
@@ -301,38 +306,112 @@ class MotionPlanner:
         '''
         Disables collision checking for the target object.
         '''
-        self.world_collision.enable_obstacle(target_name, False)
+        self.motion_gen.world_collision.enable_obstacle(target_name, False)
         print(f"Collision disabled for target: {target_name}")
 
     def enable_collision_for_target(self, target_name):
         '''
         Re-enables collision checking for the target object.
         '''
-        self.world_collision.enable_obstacle(target_name, True)
+        self.motion_gen.world_collision.enable_obstacle(target_name, True)
         print(f"Collision enabled for target: {target_name}")
 
     def list_obstacles(self):
-        obstacle_list = self.world_collision.get_obstacle_names()
-        filtered_list = []
+        obstacle_list = self.motion_gen.world_collision.get_obstacle_names()
+        filtered_list = set()
         for obstacle in obstacle_list:
-            if obstacle is not None:
+            # Sink technically should be an obstacle, fix later
+            if obstacle is not None and 'sink' not in obstacle:
                 print(f"Valid obstacle found: {obstacle}")
-                filtered_list.append(obstacle)
+                filtered_list.add(obstacle)
         return filtered_list
     
-    def update(self, obstacles) -> None:
-        # obstacles = self.usd_help.get_obstacles_from_stage(
-        #         # only_paths=[obstacles_path],
-        #         reference_prim_path="/World/envs/env_0",
-        #         ignore_substring=[
-        #             "Robot",
-        #             "sink",
-        #             f"{target}",
-        #         ],
-        #     ).get_collision_check_world()
-        #     # print(len(obstacles.objects))
 
-        # self.motion_gen.update_world(obstacles)
-        # self.world_cfg = obstacles
-        self.world_cfg = WorldConfig(cuboid=obstacles)
-        self.motion_gen.update_world(self.world_cfg)
+    def update(self, target) -> None:
+        ignore_list = [
+            "Robot",
+            "GroundPlane",
+            # f"{target}",
+            "X_line",
+            "Y_line",
+            "Z_line",
+            "sphere",
+        ]
+
+
+        obstacles = self.usd_help.get_obstacles_from_stage(
+            reference_prim_path="/World/envs/env_0",
+            ignore_substring=ignore_list,
+        ).get_collision_check_world()
+
+        # for obstacle in obstacles.cuboid:
+        #     print("Updating with cuboid obstacle")
+        # for obstacle in obstacles.mesh:
+        #     print("Updating with mesh obstacle")
+
+        # Update the motion generator's world model
+        self.motion_gen.update_world(obstacles)
+
+        self.world_cfg = obstacles
+
+    def update_all_obstacle_poses(self, new_poses: dict):
+        """
+        Update the poses of all obstacles using CuRobo's built-in update function.
+        
+        Parameters
+        ----------
+        new_poses : dict
+            A dictionary where keys are obstacle names and values are lists representing new poses.
+        """
+        for obstacle_name in self.list_obstacles():
+            if obstacle_name in new_poses:
+                new_pose_list = new_poses[obstacle_name]
+                
+                if not isinstance(new_pose_list, list) or len(new_pose_list) != 7:
+                    raise ValueError(f"Pose for obstacle {obstacle_name} must be a list of 7 elements.")
+                
+                new_pose = Pose.from_list(new_pose_list, tensor_args=self.tensor_args)
+
+                # Update the obstacle pose in the world model
+                self.motion_gen.world_collision.update_obstacle_pose_in_world_model(obstacle_name, new_pose)
+                print(f"Updated pose for {obstacle_name}.")
+            else:
+                print(f"No new pose provided for {obstacle_name}, skipping update.")
+
+    def get_current_poses_of_all_obstacles(self):
+        """
+        Retrieve the current poses of all obstacles.
+        
+        Returns
+        -------
+        dict
+            A dictionary where keys are obstacle names and values are Pose objects representing their current poses.
+        """
+        obstacle_poses = {}
+        for obstacle_name in self.list_obstacles():
+            try:
+                current_pose = self.get_current_pose_of_object(obstacle_name) 
+                obstacle_poses[obstacle_name] = current_pose
+            except ValueError as e:
+                print(e)
+        return obstacle_poses
+
+    def get_current_pose_of_object(self, obstacle_name):
+        """
+        Retrieve the current pose of an obstacle.
+        
+        Parameters
+        ----------
+        obstacle_name : str
+            The name of the obstacle whose pose is to be retrieved.
+        
+        Returns
+        -------
+        Pose
+            The current pose of the obstacle.
+        """
+        obstacle = self.motion_gen.world_model.get_obstacle(obstacle_name)
+        if obstacle:
+            return obstacle.pose
+        else:
+            raise ValueError(f"Obstacle {obstacle_name} not found in world collision checker.")
