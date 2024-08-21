@@ -41,47 +41,34 @@ class MotionPlanner:
     '''
     def __init__(self, env):
         self.usd_help = UsdHelper()
-
         self.usd_help.load_stage(env.scene.stage)
-        offset = 2.5
+        self.tensor_args = TensorDeviceType()
+
+        offset = 3.0
         pose = Pose.from_list([0,0,0,1,0,0,0])
 
         for i in range(env.num_envs):
             self.usd_help.add_subroot("/World", f"/World/world_{i}", pose)
-            # pose.position[0,1] += offset
+            pose.position[0,1] += offset
 
-        self.tensor_args = TensorDeviceType()
 
         robot_cfg = RobotConfig.from_dict(
             load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"], 
             self.tensor_args,
         )
-    
+
         world_cfg_list = []
         for i in range(env.num_envs):
-            world_cfg_table = WorldConfig.from_dict(
-                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+            world_cfg = WorldConfig.from_dict(
+                # load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+                load_yaml("/home/arhan/projects/clean-up-the-kitchen/planning/collision_table.yml") 
             )
-            # world_cfg_table.cuboid[0].pose[2] -= 0.01
-
-            # # With meshes
-            # world_cfg1 = WorldConfig.from_dict(
-            #     load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
-            # ).get_mesh_world()
-            # for mesh in world_cfg1.mesh:
-            #     mesh.name += "_mesh"
-                # mesh.pose[2] = -10.5  # Adjust the pose as needed
             # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
-            # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
-            self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
-            world_cfg_list.append(self.world_cfg)
-            
+            # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
+            world_cfg_list.append(world_cfg)
 
-            # Without meshes
-            # world_cfg_list.append(self.world_cfg)
-        # self.usd_help.add_world_to_stage(self.world_cfg, base_frame="/World")
+        print("CUSTOM >>", join_path(get_world_configs_path(), "collision_table.yml"))
 
-        print(join_path(get_world_configs_path(), "collision_table.yml"))
         trajopt_dt = None
         optimize_dt = True
         trajopt_tsteps = 16
@@ -110,7 +97,10 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        # self.usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        # self.usd_help.load_stage(env.scene.stage)
+        # self.usd_help.add_world_to_stage(world_cfg_list[0], base_frame="/World")
+        # breakpoint()
+
         self.device = env.device
 
         # Forward kinematics
@@ -134,6 +124,10 @@ class MotionPlanner:
         traj : torch.Tensor((N, Plan Length, 7), dtype=float32) | None
             List of trajectories for each environment, None if planning failed
         '''
+        # update world
+        # print("Updating world, reading w.r.t.", "poop")
+        # obstacles = self.usd_help.get_obstacles_from_stage()
+
         # self.update_obstacles() # Update the world with obstacles
 
         jp, jv, jn = self.env.get_joint_info()
