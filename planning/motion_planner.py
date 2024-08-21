@@ -46,8 +46,8 @@ class MotionPlanner:
         offset = 2.5
         pose = Pose.from_list([0,0,0,1,0,0,0])
 
-        for i in range(env.num_envs):
-            self.usd_help.add_subroot("/World", f"/World/world_{i}", pose)
+        # for i in range(env.num_envs):
+        #     self.usd_help.add_subroot("/World", f"/World/world_{i}", pose)
             # pose.position[0,1] += offset
 
         self.tensor_args = TensorDeviceType()
@@ -69,17 +69,17 @@ class MotionPlanner:
             #     load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
             # ).get_mesh_world()
             # for mesh in world_cfg1.mesh:
-            #     mesh.name += "_mesh"
-                # mesh.pose[2] = -10.5  # Adjust the pose as needed
+            #     mesh.pose[2] = -10.5 
+            # world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
+            # world_cfg = WorldConfig(mesh = world_cfg1.mesh)
+            world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
+            world_cfg_list.append(world_cfg)
             # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
-            # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid, mesh=world_cfg1.mesh)
-            self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
-            world_cfg_list.append(self.world_cfg)
             
 
             # Without meshes
             # world_cfg_list.append(self.world_cfg)
-        # self.usd_help.add_world_to_stage(self.world_cfg, base_frame="/World")
+        self.usd_help.add_world_to_stage(world_cfg, base_frame="/World")
 
         print(join_path(get_world_configs_path(), "collision_table.yml"))
         trajopt_dt = None
@@ -95,12 +95,12 @@ class MotionPlanner:
             collision_checker_type=CollisionCheckerType.MESH,
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
-            collision_cache={"obb": 20, "mesh": 10},
+            collision_cache={"obb": 20, "mesh": 30},
         )
 
         self.motion_gen = MotionGen(motion_gen_config)
         # print("warming up...")
-        # self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
+        self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
         print("Curobo is ready!")
 
         self.plan_config = MotionGenPlanConfig(
@@ -257,12 +257,12 @@ class MotionPlanner:
             joint_names=joint_names
         )
 
-        self.motion_gen.attach_objects_to_robot(
-            joint_state,
-            [closest_object],
-            sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
+        print(self.motion_gen.attach_objects_to_robot(
+            joint_state=joint_state,
+            object_names=[closest_object],
+            sphere_fit_type=SphereFitType.VOXEL_VOLUME_INSIDE,
             world_objects_pose_offset=Pose.from_list([0, 0, 0.01, 1, 0, 0, 0], self.tensor_args),
-        )
+        ))
 
         print(f"Object {closest_object} attached to robot.")
         return closest_object
@@ -320,8 +320,7 @@ class MotionPlanner:
         obstacle_list = self.motion_gen.world_collision.get_obstacle_names()
         filtered_list = set()
         for obstacle in obstacle_list:
-            # Sink technically should be an obstacle, fix later
-            if obstacle is not None and 'sink' not in obstacle:
+            if obstacle is not None:
                 print(f"Valid obstacle found: {obstacle}")
                 filtered_list.add(obstacle)
         return filtered_list
@@ -349,6 +348,8 @@ class MotionPlanner:
         # for obstacle in obstacles.mesh:
         #     print("Updating with mesh obstacle")
 
+        # Am I supposed to be adding an obstacle here? 
+
         # Update the motion generator's world model
         self.motion_gen.update_world(obstacles)
 
@@ -374,7 +375,7 @@ class MotionPlanner:
 
                 # Update the obstacle pose in the world model
                 self.motion_gen.world_collision.update_obstacle_pose_in_world_model(obstacle_name, new_pose)
-                print(f"Updated pose for {obstacle_name}.")
+                print(f"Updated pose for {obstacle_name} with pose {new_pose}.")
             else:
                 print(f"No new pose provided for {obstacle_name}, skipping update.")
 
