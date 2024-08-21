@@ -59,7 +59,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         width=320,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
-            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, #clipping_range=(0.1, 2.0)
+            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, # clipping_range=(0.1, 2.0)
         ),
         offset=CameraCfg.OffsetCfg(pos=(-0.7, 1.1, 1.0), rot=(0.4, 0.27, -0.45, -0.75), convention="opengl"),
         semantic_filter="class:*",
@@ -91,10 +91,11 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         )
 
     
-    def setup(self, usd_info):
+    def setup(self, cfg):
+        usd_info = cfg.usd_info
+
         # parse and add USD
         objs = {}
-        
         marker_cfg = FRAME_MARKER_CFG.copy()
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
@@ -148,14 +149,7 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    # will be set by agent env cfg
-    body_joint_pos: mdp.DifferentialInverseKinematicsActionCfg = DifferentialInverseKinematicsActionCfg(
-        asset_name="robot",
-        joint_names=["panda_joint.*"],
-        body_name="panda_hand",
-        controller=DifferentialIKControllerCfg(command_type="pose", use_relative_mode=False, ik_method="dls"),
-        body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=[0.0, 0.0, 0.0]),
-    )
+    body_joint_pos: DifferentialInverseKinematicsActionCfg = None
 
     finger_joint_pos: mdp.BinaryJointPositionActionCfg = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
@@ -163,6 +157,20 @@ class ActionsCfg:
         open_command_expr={"panda_finger_.*": 0.04},
         close_command_expr={"panda_finger_.*": 0.0},
     )
+
+    def setup(self, cfg):
+        relative_mode = cfg.actions.type == "relative"
+        
+        action_cfg = DifferentialInverseKinematicsActionCfg(
+            asset_name="robot",
+            joint_names=["panda_joint.*"],
+            body_name="panda_hand",
+            controller=DifferentialIKControllerCfg(
+                command_type="pose", use_relative_mode=relative_mode, ik_method="dls"),
+            body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+        )
+
+        setattr(self, "body_joint_pos", action_cfg)
 
 
 @configclass
@@ -175,11 +183,16 @@ class ObservationsCfg:
 
         # joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         # joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        ee_position = ObsTerm(
+        ee_pose = ObsTerm(
             func=mdp.ee_pose,
         )
+        gripper_state = ObsTerm(
+                func=mdp.gripper_state,
+                        )
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
+        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
+        pcd = ObsTerm(func=mdp.get_point_cloud)
         # shoulder_cam = ObsTerm(
         #         func=mdp.camera_rgb,
         #         )
@@ -203,7 +216,8 @@ class ObservationsCfg:
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     
-    def setup(self, usd_info):
+    def setup(self, cfg):
+        usd_info = cfg.usd_info
         for name in usd_info["xforms"]:
             setattr(self.policy, name, ObsTerm(
                     func=mdp.object_position_in_robot_root_frame, 
@@ -313,7 +327,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 16 * 1024
         self.sim.physx.friction_correlation_distance = 0.00625
 
-    def setup(self, usd_info):
+    def setup(self, cfg):
         for _, attr in self.__dict__.items():
             if hasattr(attr, 'setup') and callable(getattr(attr, 'setup')):
-                attr.setup(usd_info)
+                attr.setup(cfg)

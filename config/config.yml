@@ -1,8 +1,15 @@
 usd_info_path: "./data/bowl2sink_xform_mapping.yml"
 log_dir: "./logs"
+
+actions:
+  type: "ee_pose"
+observations:
+reward:
+
 data:
   collect_data: true
-  max_episodes: 100
+  max_episodes: 500
+
 video:
   enabled: false
   viewer_resolution: [320, 240]
