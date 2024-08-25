@@ -28,6 +28,7 @@ from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from planning.orchestrator import Orchestrator
+from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 
 def do_nothing(env):
@@ -57,7 +58,8 @@ def main():
 
     # video wrapper stuff
     viewer_cfg = cfg.video.copy()
-    env_cfg.viewer.resolution = viewer_cfg.pop("viewer_resolution")
+    viewer_resolution = tuple(cfg.video.viewer_resolution)
+    env_cfg.viewer.resolution = viewer_resolution
     env_cfg.viewer.eye = viewer_cfg.pop("viewer_eye")
     env_cfg.viewer.lookat = viewer_cfg.pop("viewer_lookat")
     video_kwargs = viewer_cfg
@@ -67,7 +69,12 @@ def main():
 
     # apply wrappers
     if cfg.video.enabled:          
-        env = gym.wrappers.RecordVideo(env, **video_kwargs)
+        video_kwargs = {
+            "video_folder": cfg.video.video_folder,
+            "step_trigger": lambda step: step % cfg.video.save_steps == 0,
+            "video_length": cfg.video.video_length,
+        }
+        env = gym.wrappers.RecordVideo(env, **video_kwargs) 
     if cfg.data.collect_data:
         env = DataCollector(env, cfg.data, save_dir=f"data/ds-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
 
@@ -78,10 +85,19 @@ def main():
     do_nothing(env)
     env.reset()
 
-
+    
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-        ("grasp", {"target":"bowl"}),
+        ('grasp', {"target": "blue_cup"}), 
+        ('place', {"target": "blue_cup"}), 
+        ('grasp', {"target": "bowl"}), 
+        ('place', {"target": "bowl"}), 
+        ('grasp', {"target": "ketchup"}), 
+        ('place', {"target": "ketchup"}), 
+        ('grasp', {"target": "paper_cup"}), 
+        ('place', {"target": "paper_cup"}), 
+        ('grasp', {"target": "big_spoon"}), 
+        ('place', {"target": "big_spoon"})
     ]
 
     # Simulate environment
@@ -95,9 +111,9 @@ def main():
         interrupted = False
         for segment in full_plan:
                 obs, rew, done, trunc, info = env.step(segment)
-                if done or trunc:
-                    interrupted = True
-                    break
+                # if done or trunc:
+                #     interrupted = True
+                #     break
         if not interrupted:
             env.reset()
 

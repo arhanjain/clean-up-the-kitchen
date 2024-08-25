@@ -1,7 +1,7 @@
-usd_info_path: "./data/bowl2sink_xform_mapping.yml"
+usd_info_path: "./data/cluttered2_xform_mapping.yml"
 log_dir: "./logs"
 data:
-  collect_data: true
+  collect_data: false
   max_episodes: 100
 video:
   enabled: false

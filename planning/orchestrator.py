@@ -1,6 +1,10 @@
 from .grasp import Grasper
 from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
+import torch
+from openai import OpenAI
+import yaml
+import re
 
 class Orchestrator:
     '''
@@ -28,8 +32,8 @@ class Orchestrator:
         self.env = env
         self.grasper = Grasper(
                 cfg.grasp,
+                env,
                 cfg.usd_info.usd_path,
-                self.env.unwrapped.device
                 )
         self.motion_planner = MotionPlanner(env)
 
@@ -53,67 +57,102 @@ class Orchestrator:
             The next action to be taken by the robot.
         '''
         for action, action_kwargs in plan_template:
-            action = Action.create(action, **action_kwargs)
+            action = Action.create(action, **action_kwargs) 
             for step in action.build(self.env):
                 yield step
 
-    def poop(self, plane_template):
-        for action_type, object, location in plan_template:
-            # rgb, seg, depth, meta_data = self.env.get_camera_data()
-            # loaded_data = rgb, seg, depth, meta_data
-            match action_type:
-                case "move":
-                    # get grasp pose
-                    success = torch.zeros(self.env.num_envs)
-                    while not torch.all(success):
-                        grasp_pose, success = self.grasper.get_grasp(self.env, object)
-                    pregrasp_pose = self.grasper.get_pregrasp(grasp_pose, 0.1)
+    def generate_cleanup_tasks(scene_info):
+        """
+        Generates a list of tasks needed to clean up the kitchen based on the scene layout.
 
-                    # go to pregrasp
-                    joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
-                    if not success:
-                        print("Failed to plan to pregrasp")
-                        yield None
-                    else:
-                        traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                        yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
-                    
-                    
-                    # go to grasp
-                    action = torch.cat((grasp_pose, torch.ones(1,1)), dim=1).to(self.device)
-                    yield action.repeat(1, 30, 1)
-                    # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    # traj, success = self.plan(joint_pos, joint_vel, joint_names, grasp_pose, mode="ee_pose")
-                    # if not success:
-                    #     print("Failed to plan to grasp")
-                    #     yield None  
-                    # else:
-                    #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                    #     # traj, traj_length = self.test_format(traj, maxpad=500)
-                    #     yield torch.cat((traj, torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+        Args:
+        - scene_info (list): A list of objects in the scene.
 
-                    # grasp
-                    ee_frame_sensor = self.env.unwrapped.scene["ee_frame"]
-                    tcp_rest_position = ee_frame_sensor.data.target_pos_source[..., 0, :].clone()
-                    tcp_rest_orientation = ee_frame_sensor.data.target_quat_source[..., 0, :].clone()
-                    ee_pose = torch.cat([tcp_rest_position, tcp_rest_orientation], dim=-1)
-                    close_gripper = -1 * torch.ones(self.env.num_envs, 1).to(self.device)
-                    yield torch.cat((ee_pose, close_gripper), dim=1).repeat(1, 20, 1)
+        Returns:
+        - str: Formatted string with tasks for cleaning up the kitchen.
+        """
 
-                    # go to pregrasp
-                    action = torch.cat((pregrasp_pose, -torch.ones(1,1)), dim=1).to(self.device)
-                    yield action.repeat(1, 30, 1)
-                    # joint_pos, joint_vel, joint_names = self.env.get_joint_info()
-                    # traj, success = self.plan(joint_pos, joint_vel, joint_names, pregrasp_pose, mode="ee_pose")
-                    # if not success:
-                    #     print("Failed to plan to pregrasp")
-                    #     yield None
-                    # else:
-                    #     traj, traj_length = self.test_format(traj, maxpad=max(t.ee_position.shape[0] for t in traj))
-                    #     yield torch.cat((traj, -1*torch.ones(self.env.num_envs, traj.shape[1], 1).to(self.device)), dim=2)
+        prompt_template = """Objective: 
+        Given a scene layout, generate a list of tasks needed to clean up the kitchen using actions like "grasp" and "place". Each task should be in the format of a ("action_type", {{"target": "object_name"}}). 
+        Identify objects that should be picked up and specify their target object.
+
+        Task: Clean up the kitchen
+        Scene: {scene}
+
+        Examples:
+
+        1. Task: Clean up the kitchen
+        Scene: ['cup', 'table']
+        Answer: [('grasp', {{"target": "cup"}}), ('place', {{"target": "table"}})]
+
+        2. Task: Clean up the kitchen
+        Scene: ['plate', 'cabinet']
+        Answer: [('grasp', {{"target": "plate"}}), ('place', {{"target": "cabinet"}})]
+
+        3. Task: Clean up the kitchen
+        Scene: ['bowl', 'cup', 'table', 'cabinet']
+        Answer: [('grasp', {{"target": "bowl"}}), ('place', {{"target": "cabinet"}}), ('grasp', {{"target": "cup"}}), ('place', {{"target": "cabinet"}})]
+
+        4. Task: Clean up the kitchen
+        Scene: ['cup', 'sink', 'cabinet']
+        Answer: [('grasp', {{"target": "cup"}}), ('place', {{"target": "sink"}})]
+
+        5. Task: Clean up the kitchen
+        Scene: ['bowl', 'sink', 'cup', 'plate', 'cabinet', 'table']
+        Answer: [('grasp', {{"target": "bowl"}}), ('place', {{"target": "sink"}}), ('grasp', {{"target": "cup"}}), ('place', {{"target": "cabinet"}}), ('grasp', {{"target": "plate"}}), ('place', {{"target": "cabinet"}})]
+
+        Generate ONLY the answer for the question above (e.g, [('grasp', {{"target": "bowl"}}), ('place', {{"target": "sink"}})]):
+        """
+        
+        # Format scene_info as a string that can be inserted into the prompt
+        scene_info_str = str(scene_info)
+
+        # Apply the template formatting
+        formatted_prompt = prompt_template.format(scene=scene_info_str)
+        
+        return formatted_prompt
 
 
-                case _:
-                    raise ValueError("Invalid action type!")
-    
+
+    def extract_objects_and_sites_info(usd_info_path):
+        with open(usd_info_path) as f:
+            usd_info = yaml.safe_load(f)
+        scene_info = []
+        for obj_name, _ in usd_info["xforms"].items():
+            scene_info.append(obj_name)
+        return scene_info
+
+    def get_plan(prompt):
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ],
+        )
+        return response.choices[0].message.content
+
+    def parse_plan_template(plan_str):
+        # # Remove comments and strip the string
+        # plan_str = re.sub(r'#.*', '', plan_str).strip()
+
+        # # Define regex patterns to extract actions and parameters
+        # action_pattern = re.compile(r'\(\s*\'(\w+)\'\s*,\s*{([^}]*)}\s*\)')
+        # param_pattern = re.compile(r'\'(\w+)\'\s*:\s*\'(\w+)\'')
+
+        # plan = []
+        # for action_match in action_pattern.finditer(plan_str):
+        #     action = action_match.group(1)
+        #     params_str = action_match.group(2)
+        #     params = {}
+            
+        #     for param_match in param_pattern.finditer(params_str):
+        #         key = param_match.group(1)
+        #         value = param_match.group(2)
+        #         params[key] = value
+            
+        #     plan.append((action, params))
+
+        # return plan
+        pass
