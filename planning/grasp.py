@@ -34,16 +34,17 @@ class Grasper:
         The device to run the model on. Preferable same GPU as the environment.
 
     '''
-    def __init__(self, grasp_cfg, usd_path=None, device=0) -> None:
+    def __init__(self, grasp_cfg, env, usd_path=None,) -> None:
         # Load Model
         self._model = M2T2.from_config(grasp_cfg.m2t2)
         ckpt = torch.load(grasp_cfg.eval.checkpoint)
         self._model.load_state_dict(ckpt["model"])
-        self._model = self._model.to(device).eval()
+        self._model = self._model.to(env.unwrapped.device).eval()
 
         self._usd_path = usd_path
         self._synthetic_pcd = grasp_cfg.data.synthetic_pcd
         self._cfg = grasp_cfg
+        self._env = env
 
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
         quaternion = [0.0896, -0.7723, -0.6288,  0.0105]
@@ -91,7 +92,7 @@ class Grasper:
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
             data, outputs = self.load_and_predict_real(data, self._model, self._cfg, manipulation_type, obj_label=object_class)
-            (goal_pos, goal_quat), success = self.choose_manipulation(outputs, manipulation_type)
+            (goal_pos, goal_quat), success = self.choose_manipulation(outputs, manipulation_type, object_class = object_class)
 
         if viz:
             self.visualize(data[0], {k: v[0] for k, v in outputs.items()})
@@ -464,7 +465,7 @@ class Grasper:
 
         return data, outputs
 
-    def choose_manipulation(self, outputs, manipulation_type):
+    def choose_manipulation(self, outputs, manipulation_type, object_class=None):
         '''
         Takes in the output of load_and_predict. Input will have N environments, out 
         of which M will be successes. Outputs the best manipulation per environment
@@ -502,13 +503,28 @@ class Grasper:
                 continue
             manipulations = np.concatenate(outputs[manipulation_type][i], axis=0)
             manipulation_conf = np.concatenate(outputs[conf_key][i], axis=0)
-            sorted_manipulation_idxs = np.argsort(manipulation_conf, axis=0)  # ascending order of confidence
+            manip_pos, _ = self.m2t2_grasp_to_pos_and_quat(torch.tensor(manipulations))
+            
+            target_obj_pos, _ = self._env.unwrapped.get_object_pose(object_class)
+            target_obj_pos = target_obj_pos.cpu()
+            distances = torch.norm(manip_pos - target_obj_pos, dim=1)
+
+            sorted_manipulation_idxs = np.argsort(distances, axis=0)  # ascending order of distance
             manipulations = manipulations[sorted_manipulation_idxs]
-            best_manipulations.append(manipulations[-1])
+            best_manipulations.append(manipulations[0])
             successes.append(True)
 
+            # sorted_manipulation_idxs = np.argsort(manipulation_conf, axis=0)  # ascending order of confidence
+            # manipulations = manipulations[sorted_manipulation_idxs]
+            # best_manipulations.append(manipulations[-1])
+            # successes.append(True)
+
         # Convert manipulation poses from M2T2 form to Isaac form
-        best_manipulations = torch.tensor(best_manipulations)
+        try:
+            best_manipulations = torch.tensor(best_manipulations)
+        except:
+            breakpoint()
+
         if len(best_manipulations) == 0:
             pos, quat = torch.zeros(1, 1), torch.zeros(1, 1)
         else:

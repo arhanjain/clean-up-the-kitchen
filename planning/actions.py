@@ -107,10 +107,8 @@ class GraspAction(Action, action_name="grasp"):
             raise ValueError("Grasper service not found")
         if planner is None:
             raise ValueError("Motion planner service not found")
-        
-        # planner.list_obstacles()
-        # Disable collision for target before grasping
-        # planner.disable_collision_for_target(self.target)
+
+        planner.update()
 
         # Find successful plan
         traj = None
@@ -120,12 +118,12 @@ class GraspAction(Action, action_name="grasp"):
             grasp_pose = None
             while not torch.all(success):
                 grasp_pose, success = grasper.get_grasp(env, self.target)
-            
+
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
-
             # Plan motion to pregrasp
             traj = planner.plan(pregrasp_pose, mode="ee_pose")
+
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -144,59 +142,14 @@ class GraspAction(Action, action_name="grasp"):
         close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield close_gripper
-        
-        # Attach the object to the robot
-        ee_pose_at_grasp = grasp_pose[:, :3].detach().clone()
-        target = planner.attach_closest_object_to_robot(ee_pose_at_grasp)
 
-        # Update poses of objects
-        obj_poses = planner.get_current_poses_of_all_obstacles()
-        planner.update_all_obstacle_poses(obj_poses)
+        planner.update()
+        planner.attach_obj(self.target)
         
-        # Update world after attaching the object
-        planner.update(target)
-
         # Go to pregrasp pose
         go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
-
-@dataclass(frozen=True)
-class ReachAction(Action, action_name="reach"):
-    target: str
-
-    def build(self, env):
-        # Ensure required services are registered
-        planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
-        if planner is None:
-            raise ValueError("Motion planner service not found")
-
-        # grasp marker
-        marker_cfg = VisualizationMarkersCfg(
-         prim_path="/Visuals/graspviz",
-         markers={
-             "frame": sim_utils.UsdFileCfg(
-                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
-                 scale=(0.05, 0.05, 0.05),
-             ),
-         }
-        )
-        marker = VisualizationMarkers(marker_cfg)
-
-        # Find successful plan
-        target_pos = env.unwrapped.scene[self.target].data.root_pos_w
-        # target_quat = env.unwrapped.scene[self.target].data.root_quat_w
-        quat = math.quat_from_euler_xyz(torch.tensor([np.pi]), torch.tensor([0]), torch.tensor([0]))
-        target_pose = torch.cat((target_pos, quat.to(0)), dim=1)
-
-        marker.visualize(target_pose[:,:3], target_pose[:, 3:])
-
-        traj = planner.plan(target_pose, mode="ee_pose")
-        if traj is None:
-            return 
-
-        for pose_idx in range(traj.shape[1]):
-            yield traj[: pose_idx]
 
 @dataclass(frozen=True)
 class PlaceAction(Action, action_name="place"):
@@ -212,9 +165,6 @@ class PlaceAction(Action, action_name="place"):
         if planner is None:
             raise ValueError("Motion planner service not found")
         
-        # Technically unnecesarry since it's already attached to the robot.
-        # planner.disable_collision_for_target(self.target)
-
         # Find successful plan
         traj = None
         while traj is None:
@@ -247,9 +197,8 @@ class PlaceAction(Action, action_name="place"):
         for _ in range(self.GRASP_STEPS):
             yield open_gripper
 
-        # Detach from robot once it has been dropped
-        planner.detach_object_from_robot()
-        # planner.enable_collision_for_target(self.target)
+        planner.detach_obj()
+        planner.update()
         
         # Go to pregrasp pose
         go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)

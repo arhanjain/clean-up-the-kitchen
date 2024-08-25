@@ -8,6 +8,7 @@ from .utils import misc_utils
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnv
 from typing import Optional
+from omni.isaac.lab.utils.math import subtract_frame_transforms
 
 
 
@@ -41,6 +42,23 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         joint_names = self.scene["robot"].data.joint_names
 
         return joint_pos, joint_vel, joint_names
+
+    def get_object_pose(self, object_name: str):
+        pos_w = self.scene[object_name].data.root_pos_w
+        quat_w = self.scene[object_name].data.root_quat_w
+
+        # convert to robot frame
+        robot_pos_w = self.scene["robot"].data.root_state_w[:, :3]
+        robot_quat_w = self.scene["robot"].data.root_state_w[:, 3:7]
+
+        pos_r, quat_r = subtract_frame_transforms(
+            robot_pos_w, robot_quat_w,
+            pos_w, quat_w
+            )
+
+        return pos_r, quat_r
+
+
 
     def get_camera_data(self):
         '''

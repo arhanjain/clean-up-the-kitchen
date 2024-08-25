@@ -32,8 +32,8 @@ class Orchestrator:
         self.env = env
         self.grasper = Grasper(
                 cfg.grasp,
+                env,
                 cfg.usd_info.usd_path,
-                self.env.unwrapped.device
                 )
         self.motion_planner = MotionPlanner(env)
 
