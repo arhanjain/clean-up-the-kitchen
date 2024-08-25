@@ -31,76 +31,6 @@ from planning.orchestrator import Orchestrator
 from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 
-def build_collision_table(cfg):
-    from pxr import Usd, UsdGeom
-    import yaml
-
-    def get_object_dims(stage, subpath):
-        prim = stage.GetPrimAtPath(subpath)
-        if not prim:
-            raise ValueError(f"Prim not found at path: {subpath}")
-        
-        bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
-        bbox = bbox_cache.ComputeWorldBound(prim).GetRange()
-        
-        dims = bbox.GetSize()
-        dims_list = [dims[0], dims[2], dims[1]]
-        
-        return dims_list
-
-    try:
-        with open(cfg.usd_info_path) as file:
-            data = yaml.safe_load(file)
-            usd_path = data['usd_path']
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {cfg.usd_info_path}")
-    except yaml.YAMLError as e:
-        raise ValueError(f"Error parsing YAML file: {e}")
-
-    stage = Usd.Stage.Open(usd_path)
-    if not stage:
-        raise ValueError(f"Failed to open USD file: {usd_path}")
-
-    collision_table = {"cuboid": {}}
-
-    for name, obj in data['xforms'].items():
-        if name == "sink":
-            continue  # Skip the sink object
-        dims = get_object_dims(stage, obj['subpath'])
-
-        # Fetch the transformation matrix
-        prim = stage.GetPrimAtPath(obj['subpath'])
-        transform = torch.tensor(prim.GetChildren()[0].GetAttribute("xformOp:transform").Get())
-        
-        # Get position and quaternion
-        pos, quat = GUI_matrix_to_pos_and_quat(transform)
-
-        z_offset = 0.02
-
-        pos[2] += z_offset
-        
-        # Convert pos and quat to tensors
-        pos_tensor = torch.tensor(pos)
-        quat_tensor = torch.tensor(quat)
-
-        # Concatenate pos and quat to form pose using torch.cat
-        pose_tensor = torch.cat((pos_tensor, quat_tensor))
-        pose = pose_tensor.tolist()  # Convert to list for YAML output
-
-        obj_cfg = {
-            "dims": dims,
-            "pose": pose
-        }
-        collision_table["cuboid"][name] = obj_cfg
-
-    collision_table_path = "/home/jacob/projects/curobo/src/curobo/content/configs/world/collision_table.yml"
-    try:
-        with open(collision_table_path, 'w') as file:
-            yaml.dump(collision_table, file, default_flow_style=False)
-        print(f"Collision table saved successfully at {collision_table_path}")
-    except IOError as e:
-        print(f"Failed to save collision table: {e}")
-
 def do_nothing(env):
     # ee_frame_sensor = env.unwrapped.scene["ee_frame"]
     # tcp_rest_position = ee_frame_sensor.data.target_pos_w[..., 0, :].clone() - env.unwrapped.scene.env_origins
@@ -155,7 +85,6 @@ def main():
     do_nothing(env)
     env.reset()
 
-    # build_collision_table(cfg)
     
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
