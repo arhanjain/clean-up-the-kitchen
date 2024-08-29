@@ -68,7 +68,7 @@ class Site(SensorBase):
                     )
                 )
             # set their visibility to true
-            self.frame_visualizer.set_visibility(True)
+            self.frame_visualizer.set_visibility(False)
         else:
             if hasattr(self, "frame_visualizer"):
                 self.frame_visualizer.set_visibility(False)

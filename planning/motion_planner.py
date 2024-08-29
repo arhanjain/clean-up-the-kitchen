@@ -1,7 +1,7 @@
 import torch
 # CuRobo 
 from curobo.geom.sdf.world import CollisionCheckerType 
-from curobo.geom.types import WorldConfig 
+from curobo.geom.types import WorldConfig, Cuboid, Material, Mesh
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.robot import CudaRobotModelConfig, JointState, RobotConfig
@@ -9,6 +9,7 @@ from curobo.types.state import JointState
 from curobo.util.logger import log_error, setup_curobo_logger
 from curobo.util.usd_helper import UsdHelper
 from curobo.cuda_robot_model.cuda_robot_model import CudaRobotModel
+from curobo.geom.sphere_fit import SphereFitType
 from curobo.util_file import (
     get_assets_path,
     get_filename,
@@ -26,7 +27,9 @@ from curobo.wrap.reacher.motion_gen import (
     PoseCostMetric,
 )
 from typing import List, Tuple
-    
+from pxr import UsdGeom, UsdShade, Gf, Sdf
+from curobo.geom.sdf.world_mesh import WorldMeshCollision, WorldCollisionConfig
+
 class MotionPlanner:
     '''
     The motion planning system. Uses the CuRobo library to plan trajectories.
@@ -36,32 +39,35 @@ class MotionPlanner:
     env: ManagerBasedRLEnv
         The environment to plan in.
     '''
-
     def __init__(self, env):
-        usd_help = UsdHelper()
+        self.usd_help = UsdHelper()
+        self.usd_help.load_stage(env.scene.stage)
+        self.tensor_args = TensorDeviceType()
 
-        usd_help.load_stage(env.scene.stage)
-        offset = 2.5
+        offset = 3.0
         pose = Pose.from_list([0,0,0,1,0,0,0])
 
         for i in range(env.num_envs):
-            usd_help.add_subroot("/World", f"/World/world_{i}", pose)
+            self.usd_help.add_subroot("/World", f"/World/world_{i}", pose)
             pose.position[0,1] += offset
 
-        self.tensor_args = TensorDeviceType()
 
         robot_cfg = RobotConfig.from_dict(
             load_yaml(join_path(get_robot_configs_path(), "franka.yml"))["robot_cfg"], 
             self.tensor_args,
         )
-    
+
         world_cfg_list = []
         for i in range(env.num_envs):
             world_cfg = WorldConfig.from_dict(
-                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+                # load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+                load_yaml("/home/arhan/projects/clean-up-the-kitchen/planning/collision_table.yml") 
             )
-            # usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
+            # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
             world_cfg_list.append(world_cfg)
+
+        print("CUSTOM >>", join_path(get_world_configs_path(), "collision_table.yml"))
 
         trajopt_dt = None
         optimize_dt = True
@@ -76,12 +82,12 @@ class MotionPlanner:
             collision_checker_type=CollisionCheckerType.MESH,
             use_cuda_graph=True,
             interpolation_dt=interpolation_dt,
-            collision_cache={"obb": 30, "mesh": 100},
-            )
+            collision_cache={"obb": 20, "mesh": 30},
+        )
 
         self.motion_gen = MotionGen(motion_gen_config)
         # print("warming up...")
-        # self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
+        self.motion_gen.warmup(enable_graph=True, warmup_js_trajopt=False, parallel_finetune=True)
         print("Curobo is ready!")
 
         self.plan_config = MotionGenPlanConfig(
@@ -91,13 +97,14 @@ class MotionPlanner:
             # enable_finetune_trajopt=True,
         )
 
-        # usd_help.add_world_to_stage(world_cfg, base_frame="/World")
+        # self.usd_help.load_stage(env.scene.stage)
+        # self.usd_help.add_world_to_stage(world_cfg_list[0], base_frame="/World")
+
         self.device = env.device
 
         # Forward kinematics
         self.kin_model = CudaRobotModel(robot_cfg.kinematics)
         self.env = env
-        # update obstacles and stuff
 
     def plan(self, goal, mode="ee_pose") -> torch.Tensor | None:
         '''
@@ -116,6 +123,12 @@ class MotionPlanner:
         traj : torch.Tensor((N, Plan Length, 7), dtype=float32) | None
             List of trajectories for each environment, None if planning failed
         '''
+        # update world
+        # print("Updating world, reading w.r.t.", "poop")
+        # obstacles = self.usd_help.get_obstacles_from_stage()
+
+        # self.update_obstacles() # Update the world with obstacles
+
         jp, jv, jn = self.env.get_joint_info()
         cu_js = JointState( position=self.tensor_args.to_device(jp),
             velocity=self.tensor_args.to_device(jv) * 0.0,
@@ -144,20 +157,14 @@ class MotionPlanner:
             result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
         else: 
             result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
-
-        # Check failure cases
-        if result.status == MotionGenStatus.TRAJOPT_FAIL:
-            print('TRAJOPT_FAIL')
-            return None
-        if result.status == MotionGenStatus.IK_FAIL:
-            print("IK FAILURE")
+        
+        if not torch.all(result.success):
+            print("Failed to plan for all environments")
+            print(result.status)
             return None
 
         # Extract the trajectories based on single vs batch
         traj = [result.interpolated_plan] if len(ik_goal) == 1 else result.get_paths()
-        for t in traj:
-            if t is None:
-                return None
 
         # Return in desired format
         if mode == "joint_pos":
@@ -203,3 +210,118 @@ class MotionPlanner:
             tensors.append(pose)
         return torch.stack(tensors)
 
+    def update(
+        self,
+        ignore_substring: List[str] = ["Franka", "material", "Plane", "Visuals",],
+        robot_prim_path: str = "/World/env_0/robot/panda_link0", # caution when going multienv
+    ) -> None:
+        print("updating world...")
+        obstacles = self.usd_help.get_obstacles_from_stage(
+            ignore_substring=ignore_substring, reference_prim_path=robot_prim_path
+        ).get_collision_check_world()
+
+        self.motion_gen.update_world(obstacles)
+        # self._world_cfg = obstacles
+
+    def attach_obj(
+        self,
+        obj_name: str,
+    ) -> None:
+
+        jp, jv, jn = self.env.get_joint_info()
+        cu_js = JointState(
+            position=self.tensor_args.to_device(jp),
+            velocity=self.tensor_args.to_device(jv) * 0.0,
+            acceleration=self.tensor_args.to_device(jv) * 0.0,
+            jerk=self.tensor_args.to_device(jv) * 0.0,
+            joint_names=jn,
+        )
+
+        obstacles = self.motion_gen.world_model
+        obj_path = [obs.name for obs in obstacles if obj_name in obs.name]
+
+        assert len(obj_path) > 0, f"Object {obj_name} not found in the world"
+
+        self.motion_gen.attach_objects_to_robot(
+            cu_js,
+            obj_path,
+            sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
+            world_objects_pose_offset=Pose.from_list([0, 0, 0.01, 1, 0, 0, 0], self.tensor_args),
+        )
+
+    def detach_obj(self) -> None:
+        self.motion_gen.detach_object_from_robot()
+
+    @staticmethod
+    def build_collision_table(cfg):
+        from pxr import Usd, UsdGeom
+        import yaml
+
+        def get_object_dims(stage, subpath):
+            prim = stage.GetPrimAtPath(subpath)
+            if not prim:
+                raise ValueError(f"Prim not found at path: {subpath}")
+            
+            bbox_cache = UsdGeom.BBoxCache(Usd.TimeCode.Default(), [UsdGeom.Tokens.default_])
+            bbox = bbox_cache.ComputeWorldBound(prim).GetRange()
+            
+            dims = bbox.GetSize()
+            dims_list = [dims[0], dims[2], dims[1]]
+            
+            return dims_list
+
+        try:
+            with open(cfg.usd_info_path) as file:
+                data = yaml.safe_load(file)
+                usd_path = data['usd_path']
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {cfg.usd_info_path}")
+        except yaml.YAMLError as e:
+            raise ValueError(f"Error parsing YAML file: {e}")
+
+        stage = Usd.Stage.Open(usd_path)
+        if not stage:
+            raise ValueError(f"Failed to open USD file: {usd_path}")
+
+        collision_table = {"cuboid": {}}
+
+        for name, obj in data['xforms'].items():
+            if name == "sink":
+                continue  # Skip the sink object
+            dims = get_object_dims(stage, obj['subpath'])
+
+            # Fetch the transformation matrix
+            prim = stage.GetPrimAtPath(obj['subpath'])
+            transform = torch.tensor(prim.GetChildren()[0].GetAttribute("xformOp:transform").Get())
+            
+            # Get position and quaternion
+            pos, quat = GUI_matrix_to_pos_and_quat(transform)
+
+            z_offset = 0.02
+
+            pos[2] += z_offset
+            
+            # Convert pos and quat to tensors
+            pos_tensor = torch.tensor(pos)
+            quat_tensor = torch.tensor(quat)
+
+            # Concatenate pos and quat to form pose using torch.cat
+            pose_tensor = torch.cat((pos_tensor, quat_tensor))
+            pose = pose_tensor.tolist()  # Convert to list for YAML output
+
+            obj_cfg = {
+                "dims": dims,
+                "pose": pose
+            }
+            collision_table["cuboid"][name] = obj_cfg
+
+        collision_table_path = "/home/jacob/projects/curobo/src/curobo/content/configs/world/collision_table.yml"
+        try:
+            with open(collision_table_path, 'w') as file:
+                yaml.dump(collision_table, file, default_flow_style=False)
+            print(f"Collision table saved successfully at {collision_table_path}")
+        except IOError as e:
+            print(f"Failed to save collision table: {e}")
+
+
+        

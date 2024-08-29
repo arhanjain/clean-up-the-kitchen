@@ -33,6 +33,7 @@ from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from planning.orchestrator import Orchestrator
+from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 from config import Config
 
@@ -65,7 +66,6 @@ def main(cfg: Config):
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
     env = DataCollector(env, cfg.data_collection, save_dir=f"data/{args_cli.ds_name}")
-                            # save_dir=f"data/ds-{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}")
 
     # Reset environment
     env.reset()
