@@ -11,6 +11,7 @@ from omni.isaac.lab.assets import RigidObject
 from omni.isaac.lab.managers import SceneEntityCfg
 from omni.isaac.lab.utils.math import subtract_frame_transforms
 from omni.isaac.lab.sensors import FrameTransformer
+from real2simenv.utils import misc_utils
 
 if TYPE_CHECKING:
     from omni.isaac.lab.envs import ManagerBasedRLEnv
@@ -38,6 +39,29 @@ def get_camera_data(
   
     camera = env.scene[camera_cfg.name]
     return camera.data.output[type]
+
+def get_point_cloud(
+    env: ManagerBasedRLEnv,
+    camera_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+) -> torch.Tensor:
+    intrinsics = env.scene[camera_cfg.name].data.intrinsic_matrices
+    depth = env.scene[camera_cfg.name].data.output["distance_to_image_plane"]
+
+    raw_pcd = misc_utils.depth_to_xyz(depth, intrinsics)
+    return raw_pcd[0]
+    # mask = torch.isfinite(raw_pcd).all(dim=-1)
+    # filtered_pcd = raw_pcd[mask]
+    # return filtered_pcd.view(-1, 3)
+
+
+
+def gripper_state(
+    env: ManagerBasedRLEnv,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    robot: RigidObject = env.scene[robot_cfg.name]
+    gripper_state = robot.data.joint_pos[:, -2:]
+    return gripper_state
 
 def ee_pose(
     env: ManagerBasedRLEnv,

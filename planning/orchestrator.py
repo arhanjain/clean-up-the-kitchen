@@ -3,6 +3,7 @@ from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
 import torch
 from openai import OpenAI
+from config import Config
 import yaml
 import re
 
@@ -28,12 +29,12 @@ class Orchestrator:
         The motion planning system.
     
     '''
-    def __init__(self, env, cfg):
+    def __init__(self, env, cfg: Config):
         self.env = env
         self.grasper = Grasper(
-                cfg.grasp,
                 env,
-                cfg.usd_info.usd_path,
+                cfg.grasp,
+                cfg.usd_path,
                 )
         self.motion_planner = MotionPlanner(env)
 

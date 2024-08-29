@@ -6,6 +6,7 @@ pyrightconfig.json
 pyproject.toml
 *.ipynb
 runs/
+outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

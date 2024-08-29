@@ -17,6 +17,7 @@ from m2t2.meshcat_utils import (
     create_visualizer, make_frame, visualize_grasp, visualize_pointcloud
 )
 from pxr import Usd
+from config.grasp import GraspConfig
 import omni.isaac.lab.utils.math as math
 
 class Grasper:
@@ -34,7 +35,7 @@ class Grasper:
         The device to run the model on. Preferable same GPU as the environment.
 
     '''
-    def __init__(self, grasp_cfg, env, usd_path=None,) -> None:
+    def __init__(self, env, grasp_cfg: GraspConfig, usd_path=None) -> None:
         # Load Model
         self._model = M2T2.from_config(grasp_cfg.m2t2)
         ckpt = torch.load(grasp_cfg.eval.checkpoint)
@@ -42,7 +43,7 @@ class Grasper:
         self._model = self._model.to(env.unwrapped.device).eval()
 
         self._usd_path = usd_path
-        self._synthetic_pcd = grasp_cfg.data.synthetic_pcd
+        self._synthetic_pcd = grasp_cfg.synthetic_pcd
         self._cfg = grasp_cfg
         self._env = env
 

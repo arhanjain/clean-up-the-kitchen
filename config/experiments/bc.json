@@ -1,7 +1,7 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "test",
+        "name": "pick_bowl_from_state",
         "validate": false,
         "logging": {
             "terminal_output_to_txt": true,
@@ -12,7 +12,7 @@
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 250,
+            "every_n_epochs": 50,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
@@ -56,8 +56,8 @@
         ],
         "goal_mode": null,
         "cuda": true,
-        "batch_size": 100,
-        "num_epochs": 2000,
+        "batch_size": 50,
+        "num_epochs": 500,
         "seed": 1
     },
     "algo": {
@@ -81,8 +81,8 @@
             "cos_weight": 0.0
         },
         "actor_layer_dims": [
-            1024,
-            1024
+            256,
+            256
         ],
         "gaussian": {
             "enabled": false,
@@ -93,7 +93,7 @@
             "low_noise_eval": true
         },
         "gmm": {
-            "enabled": false,
+            "enabled": true,
             "num_modes": 5,
             "min_std": 0.0001,
             "std_activation": "softplus",
@@ -164,12 +164,13 @@
         "modalities": {
             "obs": {
                 "low_dim": [
-                    "bowl",
-                    "ee_position"
                 ],
                 "rgb": [],
                 "depth": [],
-                "scan": []
+                "scan": [],
+                "rgb_pcd": [
+                  "pcd"
+                ]
             },
             "goal": {
                 "low_dim": [],
@@ -200,6 +201,33 @@
             "scan": {
                 "core_class": "ScanCore",
                 "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "rgb_pcd": {
+                "core_class": "PCDCore",
+                "core_kwargs": {
+                  "input_shape": [180, 320, 3],
+                  "backbone_class": "LocalPoolPointnet",
+                  "backbone_kwargs": {
+                    "local_coord": true,
+                    "c_dim": 32,
+                    "hidden_dim": 32,
+                    "plane_type": "grid",
+                    "grid_resolution": 32,
+                    "plane_resolution": 128,
+                    "unet3d": true,
+                    "unet3d_kwargs": {
+                      "num_levels": 6,
+                      "f_maps": 32, 
+                      "in_channels": 32,
+                      "out_channels": 128,
+                      "plane_resolution": 128
+                    },
+                    "unet": false
+                  },
+                  "pool_class": null
+                },
                 "obs_randomizer_class": null,
                 "obs_randomizer_kwargs": {}
             }
