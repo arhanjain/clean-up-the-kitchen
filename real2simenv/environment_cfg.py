@@ -1,5 +1,7 @@
 
+import torch
 import numpy as np
+from config.config import Config
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
@@ -27,6 +29,7 @@ from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
 from pxr import Usd, Sdf
 from .utils import usd_utils, misc_utils
 from .sensor import SiteCfg
+import omni.isaac.lab.utils.math as math
 
 @configclass
 class Real2SimSceneCfg(InteractiveSceneCfg):
@@ -61,7 +64,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, # clipping_range=(0.1, 2.0)
         ),
-        offset=CameraCfg.OffsetCfg(pos=(-0.7, 1.1, 1.0), rot=(0.4, 0.27, -0.45, -0.75), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.10, -0.7, 0.32), rot=(0.77, 0.5, -0.23, -0.33), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -91,43 +94,41 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         )
 
     
-    def setup(self, cfg):
-        usd_info = cfg.usd_info
-
+    def setup(self, cfg: Config):
         # parse and add USD
         objs = {}
         marker_cfg = FRAME_MARKER_CFG.copy()
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
 
-        positions = {}
-        for name, attributes in usd_info.xforms.items():
-            pos, quat = attributes["position"], attributes["quaternion"]
-            usd_sub_path = attributes["subpath"]
+
+
+        stage = Usd.Stage.Open(cfg.usd_path)
+        for prim in stage.GetDefaultPrim().GetChildren():
+            sub_path = prim.GetPath().pathString
+            pos = prim.GetAttribute("xformOp:translate").Get()
+            rot = prim.GetAttribute("xformOp:orient").Get()
+            pos = (pos[0], pos[1], pos[2])
+            quat = torch.tensor((rot.GetReal(), rot.GetImaginary()[0], rot.GetImaginary()[1], rot.GetImaginary()[2]))
+
+            euler = math.euler_xyz_from_quat(quat.unsqueeze(0))
+            quat = math.quat_from_euler_xyz(euler[0]+np.pi/2, euler[1], euler[2])
+            quat = quat[0]
+
+            name = prim.GetName()
             objs[name] = RigidObjectCfg(
                 prim_path=f"{{ENV_REGEX_NS}}/{name}",
                 init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
                 spawn=usd_utils.CustomRigidUSDCfg(
-                    usd_path=usd_info.usd_path,
-                    usd_sub_path=usd_sub_path,
-                    rigid_props=RigidBodyPropertiesCfg(kinematic_enabled=attributes["disable_gravity"]),
-                    collision_props=CollisionPropertiesCfg(),
+                    usd_path=cfg.usd_path,
+                    usd_sub_path=sub_path,
                     semantic_tags=[("class", name)],
                 )
             )
-            positions[name] = pos
-
-        for name, attributes in usd_info["sites"].items():
-                pos = attributes["position"]
-                offset = np.array(pos) - np.array(positions[attributes["source"]])
-                objs[name] = SiteCfg(
-                    prim_path=f"{{ENV_REGEX_NS}}/{attributes['source']}",
-                    debug_vis=True,
-                    offset=offset.tolist()
-                )
 
         for k, v in objs.items():
             setattr(self, k, v)
+
 
 
 @configclass
@@ -149,7 +150,7 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    body_joint_pos: DifferentialInverseKinematicsActionCfg = None
+    body_joint_pos: DifferentialInverseKinematicsActionCfg | None = None
 
     finger_joint_pos: mdp.BinaryJointPositionActionCfg = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
@@ -158,7 +159,7 @@ class ActionsCfg:
         close_command_expr={"panda_finger_.*": 0.0},
     )
 
-    def setup(self, cfg):
+    def setup(self, cfg: Config):
         relative_mode = cfg.actions.type == "relative"
         
         action_cfg = DifferentialInverseKinematicsActionCfg(
@@ -181,8 +182,6 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
-        # joint_pos = ObsTerm(func=mdp.joint_pos_rel)
-        # joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         ee_pose = ObsTerm(
             func=mdp.ee_pose,
         )
@@ -193,20 +192,6 @@ class ObservationsCfg:
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
         pcd = ObsTerm(func=mdp.get_point_cloud)
-        # shoulder_cam = ObsTerm(
-        #         func=mdp.camera_rgb,
-        #         )
-
-        # object_position = ObsTerm(
-        #     func=mdp.object_position_in_robot_root_frame,
-        #     params={"object_cfg": SceneEntityCfg("Xform_266")}
-        # )
-        # target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
-
-        # actions = ObsTerm(func=mdp.last_action)
-        # rgb, seg, depth = ObsTerm(func=mdp.get_camera_data)
-        # seg = ObsTerm(func=mdp.get_camera_data, params={"type": "semantic_segmentation"})
-        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
 
 
         def __post_init__(self):
@@ -218,16 +203,7 @@ class ObservationsCfg:
     
     def setup(self, cfg):
         usd_info = cfg.usd_info
-        for name in usd_info["xforms"]:
-            setattr(self.policy, name, ObsTerm(
-                    func=mdp.object_position_in_robot_root_frame, 
-                    params={"object_cfg": SceneEntityCfg(name)}
-                    ))
-        for name in usd_info["sites"]:
-            setattr(self.policy, name, ObsTerm(
-                    func=mdp.object_position_in_robot_root_frame, 
-                    params={"object_cfg": SceneEntityCfg(name)}
-                    ))
+        # TODO: dynamically add all objects from USD as state observations
 
 
 @configclass
@@ -236,15 +212,15 @@ class EventCfg:
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
 
-    # reset_object_position = EventTerm(
-    #     func=mdp.reset_root_state_uniform,
-    #     mode="reset",
-    #     params={
-    #         "pose_range": {"x": (-0.1, 0.1), "y": (-0.25, 0.25), "z": (0.0, 0.0)},
-    #         "velocity_range": {},
-    #         "asset_cfg": SceneEntityCfg("object", body_names="Object"),
-    #     },
-    # )
+    reset_object_position = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.0, 0.1), "z": (0.0, 0.0)},
+            "velocity_range": {},
+            "asset_cfg": SceneEntityCfg("newcube"),
+        },
+    )
 
 
 @configclass
@@ -317,7 +293,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 10 # 10 hz for control/step
-        self.episode_length_s = 5.0
+        self.episode_length_s = 8.0
         # simulation settings
         self.sim.dt = 0.01  # 100Hz for physx
 

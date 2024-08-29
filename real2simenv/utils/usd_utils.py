@@ -104,35 +104,37 @@ def spawn_from_usd_test(
     if hasattr(cfg, "variants") and cfg.variants is not None:
         select_usd_variants(prim_path, cfg.variants)
 
+    # schemas.modify_rigid_body_properties(prim_path, cfg.rigid_props)
+    # schemas.modify_collision_properties(prim_path, cfg.collision_props)
     # objects = {}
     # joints = {}
-    prim = prim_utils.get_prim_at_path(prim_path)
-    prim_children = prim_utils.get_prim_children(prim)
-    for child in prim_children:
-        # child = prim_utils.get_prim_children(child)[0]
-        path = prim_utils.get_prim_path(child)
-        name = path.split("/")[-1]
-
-        print(name)
-        print(prim_utils.get_prim_object_type(path))
-        if prim_utils.get_prim_object_type(path) == "rigid_body":
-            # TODO: path here should be with a * in env_0
-            # path = path.replace("env_0","*")
-            print(path)
-            schemas.define_rigid_body_properties(path, cfg.rigid_props)
-            schemas.define_collision_properties(path, cfg.collision_props)
-
-            grandsons = prim_utils.get_prim_children(child)
-            for grandson in grandsons:
-                grandson_path = prim_utils.get_prim_path(grandson)
-                grandson_name = grandson_path.split("/")[-1]
-                if grandson_name == "FixedJoint":
-                    print("Next, this is a fixed joint", grandson_name)
-                    continue
-
-                grandson_name = name+"/"+grandson_name
-                print(grandson_name)
-                print(prim_utils.get_prim_object_type(grandson_path))
+    # prim = prim_utils.get_prim_at_path(prim_path)
+    # prim_children = prim_utils.get_prim_children(prim)
+    # for child in prim_children:
+    #     # child = prim_utils.get_prim_children(child)[0]
+    #     path = prim_utils.get_prim_path(child)
+    #     name = path.split("/")[-1]
+    #
+    #     print(name)
+    #     print(prim_utils.get_prim_object_type(path))
+    #     if prim_utils.get_prim_object_type(path) == "rigid_body":
+    #         # TODO: path here should be with a * in env_0
+    #         # path = path.replace("env_0","*")
+    #         print(path)
+    #         schemas.define_rigid_body_properties(path, cfg.rigid_props)
+    #         schemas.define_collision_properties(path, cfg.collision_props)
+    #
+    #         grandsons = prim_utils.get_prim_children(child)
+    #         for grandson in grandsons:
+    #             grandson_path = prim_utils.get_prim_path(grandson)
+    #             grandson_name = grandson_path.split("/")[-1]
+    #             if grandson_name == "FixedJoint":
+    #                 print("Next, this is a fixed joint", grandson_name)
+    #                 continue
+    #
+    #             grandson_name = name+"/"+grandson_name
+    #             print(grandson_name)
+    #             print(prim_utils.get_prim_object_type(grandson_path))
 
     # return the prim
     return prim_utils.get_prim_at_path(prim_path)

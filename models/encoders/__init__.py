@@ -1,0 +1,1 @@
+from .local_pool_pointnet.local_pool_pointnet import LocalPoolPointnet

@@ -2,6 +2,7 @@ import torch
 import pickle
 import gymnasium as gym
 import numpy as np
+from config.config import Config
 import omni.isaac.lab.utils.math as math
 
 from .utils import misc_utils
@@ -12,9 +13,29 @@ from typing import Optional
 
 
 class Real2SimRLEnv(ManagerBasedRLEnv):
-    def __init__(self, custom_cfg, *args, **kwargs):
+    def __init__(self, custom_cfg: Config, *args, **kwargs):
         self.custom_cfg = custom_cfg
         super().__init__(*args, **kwargs)
+
+
+    # TODO: this is a hacky solution which steps on reset to rerender camera,
+    # There must be a better way to do this
+    def reset(self, *args, **kwargs):
+        obs, info = super().reset(*args, **kwargs)
+
+        # get 0 action
+        action = None
+        if self.custom_cfg.actions.type == "absolute":
+            pos = self.scene["ee_frame"].data.target_pos_source[:, 0]
+            quat = self.scene["ee_frame"].data.target_quat_source[:, 0]
+            gripper = torch.zeros((self.num_envs, 1), dtype=torch.float32).to(self.device)
+            action = torch.cat((pos, quat, gripper), dim=1)
+        else:
+            raise NotImplementedError
+        
+        obs, rew, done, trunc, info = self.step(action)
+        return obs, info
+
 
     def get_joint_info(self):
         '''

@@ -14,7 +14,7 @@ parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--ds_name", type=str, required=True, help="Name of the dataset.")
 
 AppLauncher.add_app_launcher_args(parser)
-args_cli, hydra_args = parser.parse_known_args()
+args_cli, hydra_args = parser.parse_known_args() 
 sys.argv = [sys.argv[0]] + hydra_args # clear out sys.argv for hydra
 
 app_launcher = AppLauncher(args_cli)
@@ -35,9 +35,6 @@ from datetime import datetime
 from planning.orchestrator import Orchestrator
 import yaml
 from config import Config
-
-def do_nothing(env):
-    env.step(torch.tensor(env.action_space.sample()).to(env.unwrapped.device))
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: Config):
@@ -73,30 +70,29 @@ def main(cfg: Config):
     # Reset environment
     env.reset()
 
-    # Temp fix to image rendering, so that it captures RGB correctly before entering.
-    do_nothing(env)
-    env.reset()
-
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-        ("grasp", {"target":"bowl"}),
+        # ("grasp", {"target":"bowl"}),
+        ("grasp", {"target": "newcube"}),
     ]
 
     # Simulate environment
     # with torch.inference_mode():
-    # torch.set_grad_enabled(False)
     while simulation_app.is_running():
         full_plan = orchestrator.generate_plan_from_template(plan_template)
 
         # ignoring using torch inference mode for now
-        interrupted = False
+        last_action = None
+        done, trunc = False, False
         for segment in full_plan:
             obs, rew, done, trunc, info = env.step(segment)
+            last_action = segment
             if done or trunc:
-                interrupted = True
+                print("Done or truncated!")
                 break
-        if not interrupted:
+
+        if not done and not trunc:
             env.reset()
 
     env.close()
