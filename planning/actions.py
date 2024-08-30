@@ -5,7 +5,7 @@ from enum import Enum
 from abc import abstractmethod
 from typing import Generator
 from dataclasses import dataclass
-from planning.grasp import Grasper
+from planning.anygrasp import Grasper
 from planning.motion_planner import MotionPlanner
 from curobo.util.usd_helper import UsdHelper
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
@@ -117,7 +117,7 @@ class GraspAction(Action, action_name="grasp"):
             success = torch.zeros(env.unwrapped.num_envs)
             grasp_pose = None
             while not torch.all(success):
-                grasp_pose, success = grasper.get_grasp(env, self.target)
+                grasp_pose, success = grasper.get_grasp(env) 
 
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)

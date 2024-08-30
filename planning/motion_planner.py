@@ -60,8 +60,8 @@ class MotionPlanner:
         world_cfg_list = []
         for i in range(env.num_envs):
             world_cfg = WorldConfig.from_dict(
-                # load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
-                load_yaml("/home/arhan/projects/clean-up-the-kitchen/planning/collision_table.yml") 
+                load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
+                # load_yaml("/home/arhan/projects/clean-up-the-kitchen/planning/collision_table.yml") 
             )
             # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
             # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)

@@ -1,6 +1,6 @@
-from .grasp import Grasper
 from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
+from planning.anygrasp import Grasper
 import torch
 from openai import OpenAI
 import yaml
@@ -31,9 +31,8 @@ class Orchestrator:
     def __init__(self, env, cfg):
         self.env = env
         self.grasper = Grasper(
-                cfg.grasp,
-                env,
-                cfg.usd_info.usd_path,
+                cfg,
+                env
                 )
         self.motion_planner = MotionPlanner(env)
 

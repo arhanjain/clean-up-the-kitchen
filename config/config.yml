@@ -1,10 +1,10 @@
 usd_info_path: "./data/cluttered2_xform_mapping.yml"
 log_dir: "./logs"
 data:
-  collect_data: true
+  collect_data: false
   max_episodes: 100
 video:
-  enabled: true
+  enabled: false
   viewer_resolution: [320, 240]
   viewer_eye: [-4.2, -2.5, 2.0]
   viewer_lookat: [3.8, 2.7, -1.2]
@@ -45,7 +45,7 @@ sb3:
 ###############################################################################
 
 anygrasp:
-  checkpoint_path: "/home/jacob/projects/anygrasp_sdk/grasp_detection/log/checkpoint_detection.tar"
+  checkpoint_path: "/home/jacob/projects/clean-up-the-kitchen/anygrasp_sdk/grasp_detection/log/checkpoint_detection.tar"
   max_gripper_width: 0.1
   gripper_height: 0.03 #idk
   top_down_grasp: true
