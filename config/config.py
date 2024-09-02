@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Tuple
 from .grasp import GraspConfig
 
 @dataclass
@@ -12,10 +12,18 @@ class Config:
     grasp: GraspConfig = GraspConfig()
 
     @dataclass
+    class DeployConfig:
+        replay: bool = False
+        dataset: str = ""
+        checkpoint: str = ""
+    deploy: DeployConfig = DeployConfig()
+
+    @dataclass
     class VideoConfig:
         enabled: bool = False
-        viewer_resolution: List[int] = field(default_factory=lambda: 
-                                             [320, 240])
+        # viewer_resolution: List[int] = field(default_factory=lambda: 
+        #                                      [320, 240])
+        viewer_resolution: Tuple[int, int] = (320, 240)
         viewer_eye: List[float] = field(default_factory=lambda: 
                                         [-4.2, -2.5, 2.0])
         viewer_lookat: List[float] = field(default_factory=lambda: 

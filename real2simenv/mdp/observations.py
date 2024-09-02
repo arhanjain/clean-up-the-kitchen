@@ -38,7 +38,7 @@ def get_camera_data(
 ) -> torch.Tensor:
   
     camera = env.scene[camera_cfg.name]
-    return camera.data.output[type]
+    return camera.data.output[type][0][..., :3]
 
 def get_point_cloud(
     env: ManagerBasedRLEnv,

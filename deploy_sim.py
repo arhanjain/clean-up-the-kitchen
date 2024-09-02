@@ -53,9 +53,6 @@ def do_nothing(env):
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: Config):
     # Load configuration
-    with open(cfg.usd_info_path, "r") as usd_info_file:
-        usd_info = yaml.safe_load(usd_info_file)
-        cfg.usd_info = usd_info
 
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
@@ -67,10 +64,14 @@ def main(cfg: Config):
     env_cfg.setup(cfg)
 
     # video wrapper stuff
-    env_cfg.viewer.resolution = cfg.video.viewer_resolution
+    env_cfg.viewer.resolution = tuple(cfg.video.viewer_resolution)
     env_cfg.viewer.eye = cfg.video.viewer_eye
     env_cfg.viewer.lookat = cfg.video.viewer_lookat
-    video_kwargs = cfg.video
+    video_kwargs = {
+        "video_folder": cfg.video.video_folder,
+        "step_trigger": lambda step: step % cfg.video.save_steps == 0,
+        "video_length": cfg.video.video_length,
+    }
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
@@ -119,6 +120,7 @@ def main(cfg: Config):
         # Simulate environment
         with torch.inference_mode():
             while simulation_app.is_running():
+                obs["policy"]["rgb"] = obs["policy"]["rgb"].permute(2, 0, 1)
                 act = policy(obs["policy"])
                 act = unnormalize_action(act)
                 act = torch.tensor(act, dtype=torch.float32).to(env.unwrapped.device).view(1, -1)

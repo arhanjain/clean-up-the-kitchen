@@ -24,25 +24,25 @@ simulation_app = app_launcher.app
 
 import torch
 import time
-import hydra
-import gymnasium as gym
-import real2simenv
+import hydra 
+import gymnasium as gym 
+import real2simenv 
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from planning.orchestrator import Orchestrator
-from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
+# from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 from config import Config
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: Config):
     # Load configuration
-    with open(cfg.usd_info_path, "r") as usd_info_file:
-        usd_info = yaml.safe_load(usd_info_file)
-        cfg.usd_info = usd_info
+    # with open(cfg.usd_info_path, "r") as usd_info_file:
+    #     usd_info = yaml.safe_load(usd_info_file)
+    #     cfg.usd_info = usd_info
 
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(

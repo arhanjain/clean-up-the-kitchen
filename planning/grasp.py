@@ -185,6 +185,7 @@ class Grasper:
 
         selected_manipulations = all_manipulations[indices]
         pos, quat = self.m2t2_grasp_to_pos_and_quat(selected_manipulations)
+
         return (pos, quat), torch.ones(num_manipulations, dtype=torch.bool)
         
     def load_and_predict_synthetic(self, manipulation_type):
@@ -511,7 +512,7 @@ class Grasper:
             distances = torch.norm(manip_pos - target_obj_pos, dim=1)
 
             sorted_manipulation_idxs = np.argsort(distances, axis=0)  # ascending order of distance
-            manipulations = manipulations[sorted_manipulation_idxs]
+            manipulations = manipulations[sorted_manipulation_idxs.tolist()]
             best_manipulations.append(manipulations[0])
             successes.append(True)
 
@@ -521,15 +522,15 @@ class Grasper:
             # successes.append(True)
 
         # Convert manipulation poses from M2T2 form to Isaac form
-        try:
-            best_manipulations = torch.tensor(best_manipulations)
-        except:
-            breakpoint()
+        best_manipulations = torch.tensor(best_manipulations)
 
         if len(best_manipulations) == 0:
             pos, quat = torch.zeros(1, 1), torch.zeros(1, 1)
         else:
-            pos, quat = self.m2t2_grasp_to_pos_and_quat(best_manipulations)
+            try:
+                pos, quat = self.m2t2_grasp_to_pos_and_quat(best_manipulations)
+            except:
+                breakpoint()
         
         return (pos, quat), torch.tensor(successes)
 
@@ -555,7 +556,6 @@ class Grasper:
 
         # Extract rotation matrix from the transformation matrix and convert to quaternion
         rotation_matrix = transform_mat[..., :3, :3]
-
         quat = math.quat_from_matrix(rotation_matrix)
         euler_angles = math.euler_xyz_from_quat(quat) 
 

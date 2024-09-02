@@ -57,17 +57,19 @@ class MotionPlanner:
             self.tensor_args,
         )
 
+        # print("CUSTOM COLLISION TABLE >> ./collision_table.yml")
         world_cfg_list = []
         for i in range(env.num_envs):
-            world_cfg = WorldConfig.from_dict(
+            world_cfg = self.update(ret=True)
+            world_cfg_list.append(world_cfg)
+            # world_cfg = WorldConfig.from_dict(
                 # load_yaml(join_path(get_world_configs_path(), "collision_table.yml"))
-                load_yaml("/home/arhan/projects/clean-up-the-kitchen/planning/collision_table.yml") 
-            )
+            #     # load_yaml("./data/collision_table.yml") 
+            # )
             # self.usd_help.add_world_to_stage(world_cfg, base_frame=f"/World/world_{i}")
             # self.world_cfg = WorldConfig(cuboid=world_cfg_table.cuboid)
-            world_cfg_list.append(world_cfg)
+            # world_cfg_list.append(world_cfg)
 
-        print("CUSTOM >>", join_path(get_world_configs_path(), "collision_table.yml"))
 
         trajopt_dt = None
         optimize_dt = True
@@ -212,16 +214,19 @@ class MotionPlanner:
 
     def update(
         self,
-        ignore_substring: List[str] = ["Franka", "material", "Plane", "Visuals",],
+        ignore_substring: List[str] = ["Franka", "material", "Plane", "Visuals", "g60_vention"],
         robot_prim_path: str = "/World/env_0/robot/panda_link0", # caution when going multienv
-    ) -> None:
+        ret = False,
+    ) -> None | WorldConfig:
         print("updating world...")
         obstacles = self.usd_help.get_obstacles_from_stage(
             ignore_substring=ignore_substring, reference_prim_path=robot_prim_path
         ).get_collision_check_world()
 
+        if ret:
+            return obstacles
+
         self.motion_gen.update_world(obstacles)
-        # self._world_cfg = obstacles
 
     def attach_obj(
         self,
@@ -315,7 +320,7 @@ class MotionPlanner:
             }
             collision_table["cuboid"][name] = obj_cfg
 
-        collision_table_path = "/home/jacob/projects/curobo/src/curobo/content/configs/world/collision_table.yml"
+        collision_table_path = "./data/collision_table.yml"
         try:
             with open(collision_table_path, 'w') as file:
                 yaml.dump(collision_table, file, default_flow_style=False)
