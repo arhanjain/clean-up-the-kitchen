@@ -12,6 +12,7 @@ from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
+from transformers import AutoModelForVision2Seq, AutoProcessor
 
 class ServiceName(Enum):
     GRASPER = "grasper"
@@ -114,13 +115,16 @@ class GraspAction(Action, action_name="grasp"):
         traj = None
         while traj is None:
             # Get grasp pose
-            success = torch.zeros(env.unwrapped.num_envs)
-            grasp_pose = None
-            while not torch.all(success):
-                grasp_pose, success = grasper.get_grasp(env, self.target)
+            # success = torch.zeros(env.unwrapped.num_envs)
+            # grasp_pose = None
+            # while not torch.all(success):
+            #     grasp_pose, success = grasper.get_grasp(env, self.target)
+
 
             # Get pregrasp pose
-            pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+            # pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+            grasp_pose = torch.tensor([[ 0.3619,  0.3573,  0.4376,  0.0166, -0.7524, -0.6581, -0.0240]])
+            pregrasp_pose = torch.tensor([[ 0.3619,  0.3573,  0.4376,  0.0166, -0.7524, -0.6581, -0.0240]])
             # Plan motion to pregrasp
             traj = planner.plan(pregrasp_pose, mode="ee_pose")
 
@@ -205,4 +209,68 @@ class PlaceAction(Action, action_name="place"):
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
 
+    @dataclass(frozen=True)
+    class RollOutAction(Action, action_name="rollout"):
+        target: str
+        def build(self, env):
+            # Ensure required services are registered
+            grasper: Grasper = Action.get_service(ServiceName.GRASPER)
+            planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
+            if grasper is None:
+                raise ValueError("Grasper service not found")
+            if planner is None:
+                raise ValueError("Motion planner service not found")
 
+            planner.update()
+
+            # Find successful plan
+            traj = None
+            while traj is None:
+                # Get grasp pose
+                success = torch.zeros(env.unwrapped.num_envs)
+                grasp_pose = None
+                while not torch.all(success):
+                    grasp_pose, success = grasper.get_grasp(env, self.target)
+
+                # Get pregrasp pose
+                pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+                # Plan motion to pregrasp
+                traj = planner.plan(pregrasp_pose, mode="ee_pose")
+
+            # Go to pregrasp pose
+            gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
+            traj = torch.cat((traj, gripper_action), dim=2)
+            for pose_idx in range(traj.shape[1]):
+                yield traj[:, pose_idx]
+
+            ######################## OpenVLA zero-shot ##########################################
+            processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
+            vla = AutoModelForVision2Seq.from_pretrained(
+                "openvla/openvla-7b", 
+                attn_implementation="flash_attention_2",  # [Optional] Requires `flash_attn`
+                torch_dtype=torch.bfloat16, 
+                low_cpu_mem_usage=True, 
+                trust_remote_code=True
+            ).to("cuda:0")
+            
+            INSTRUCTION = f'pick up the {self.target}'
+            prompt = f'In: What action should the robot take to {INSTRUCTION}?\nOut:'
+            rgb, _, _, _ = env.get_camera_data()
+
+            # Check shapes later
+            inputs = processor(prompt, rgb).to("cuda:0", dtype=torch.bfloat16)
+
+            # Check what actions it returns, shape, etc
+            # Unnormalized (continuous) action vector --> end-effector deltas.
+            action_deltas = vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
+
+            ee_deltas = action_deltas[:, :-1]  # End-effector pose deltas
+            gripper_deltas = action_deltas[:, -1:]  # Gripper deltas
+
+            # This should get absolute end effector, might need to double check though
+            next_ee_pose = current_ee_pose + ee_deltas
+
+            next_pose_with_gripper = torch.cat((next_ee_pose, gripper_deltas), dim=1).to(env.unwrapped.device)
+
+            # Might have to return individually, double check
+            yield next_pose_with_gripper
