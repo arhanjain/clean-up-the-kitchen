@@ -29,7 +29,7 @@ simulation_app = app_launcher.app
 import torch
 import hydra
 import gymnasium as gym
-import real2simenv
+import cleanup.real2simenv
 import yaml
 import robomimic.utils.file_utils as FileUtils
 import h5py
@@ -43,14 +43,15 @@ from omni.isaac.lab_tasks.utils import parse_env_cfg
 from wrappers import DataCollector
 from models import *
 from train import PCDCore
-from config import Config
+# from config import Config
+from cleanup.config import Config
 # from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 
 def do_nothing(env):
     env.step(torch.tensor(env.action_space.sample()).to(env.unwrapped.device))
 
-@hydra.main(version_base=None, config_path="./config", config_name="config")
+@hydra.main(version_base=None, config_path="./cleanup/config/", config_name="config")
 def main(cfg: Config):
     # Load configuration
 
@@ -102,13 +103,22 @@ def main(cfg: Config):
         print("Replaying data...")
         demo = random.choice(list(data.keys()))
         data = data[demo]
-        obs = data["states"]
+        # obs = data["states"]
         actions = data["actions"]
-        for i in range(obs.shape[0]):
+        for i in range(actions.shape[0]):
             act = unnormalize_action(actions[i])
+            # act = actions[i]
             print(f"Action: {act}")
             act = torch.tensor(act, dtype=torch.float32).to(env.unwrapped.device).view(1, -1)
+            # prev_pos = obs["policy"]["ee_pose"][:, :3]
             obs, rew, done, trunc, info = env.step(act)
+            # pos = obs["policy"]["ee_pose"][:, :3]
+
+            # diff = pos-prev_pos
+            # if torch.norm(diff - act[:, :3]) > 1e-3:
+            #     print(f"Error: {torch.norm(diff - act[:, :3])}")
+            #     breakpoint()
+            # print(f"Obs: {obs['policy']['ee_pose']}")
         env.close()
     else:
         # Load model

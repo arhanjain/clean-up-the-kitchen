@@ -26,18 +26,18 @@ import torch
 import time
 import hydra 
 import gymnasium as gym 
-import real2simenv 
+import cleanup.real2simenv 
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
-from planning.orchestrator import Orchestrator
+from cleanup.planning.orchestrator import Orchestrator
 # from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
-from config import Config
+from cleanup.config import Config
 
-@hydra.main(version_base=None, config_path="./config", config_name="config")
+@hydra.main(version_base=None, config_path="./cleanup/config", config_name="config")
 def main(cfg: Config):
     # Load configuration
     # with open(cfg.usd_info_path, "r") as usd_info_file:
@@ -72,15 +72,20 @@ def main(cfg: Config):
 
 
     orchestrator = Orchestrator(env, cfg)
-    plan_template = [
-        # ("grasp", {"target":"bowl"}),
-        ("grasp", {"target": "newcube"}),
-    ]
+    # plan_template = [
+    #     ("grasp", {"target": "newcube"}),
+    # ]
+    plan1 = [("grasp", {"target": "cup"}), ("place", {"target": "placeholder"})]
+    plan2 = [("grasp", {"target": "cube"}), ("place", {"target": "placeholder"})]
+    plan3 = [("grasp", {"target": "tin"}), ("place", {"target": "placeholder"})]
+    plan4 = [("grasp", {"target": "apple"}), ("place", {"target": "placeholder"})]
 
+    plans = [plan1, plan2, plan3, plan4]
+    ep = 0
     # Simulate environment
     # with torch.inference_mode():
     while simulation_app.is_running():
-        full_plan = orchestrator.generate_plan_from_template(plan_template)
+        full_plan = orchestrator.generate_plan_from_template(plans[ep % len(plans)])
 
         # ignoring using torch inference mode for now
         last_action = None
