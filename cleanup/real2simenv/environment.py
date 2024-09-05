@@ -2,7 +2,8 @@ import torch
 import pickle
 import gymnasium as gym
 import numpy as np
-from config.config import Config
+# from config.config import Config
+from cleanup.config import Config
 import omni.isaac.lab.utils.math as math
 
 from .utils import misc_utils
@@ -31,6 +32,8 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
             quat = self.scene["ee_frame"].data.target_quat_source[:, 0]
             gripper = torch.zeros((self.num_envs, 1), dtype=torch.float32).to(self.device)
             action = torch.cat((pos, quat, gripper), dim=1)
+        elif self.custom_cfg.actions.type == "relative":
+            action = torch.tensor([[0,0,0,0,0,0,1]], dtype=torch.float32).to(self.device)
         else:
             raise NotImplementedError
         

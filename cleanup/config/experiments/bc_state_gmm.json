@@ -1,8 +1,8 @@
 {
     "algo_name": "bc",
     "experiment": {
-        "name": "pcd_rgb_gmm",
-        "validate": false,
+        "name": "bc_state_gmm",
+        "validate": true,
         "logging": {
             "terminal_output_to_txt": true,
             "log_tb": true,
@@ -43,8 +43,8 @@
         "hdf5_use_swmr": true,
         "hdf5_load_next_obs": false,
         "hdf5_normalize_obs": false,
-        "hdf5_filter_key": null,
-        "hdf5_validation_filter_key": null,
+        "hdf5_filter_key": "train",
+        "hdf5_validation_filter_key": "valid",
         "seq_length": 1,
         "pad_seq_length": true,
         "frame_stack": 1,
@@ -57,7 +57,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 50,
-        "num_epochs": 500,
+        "num_epochs": 5000,
         "seed": 1
     },
     "algo": {
@@ -164,14 +164,15 @@
         "modalities": {
             "obs": {
                 "low_dim": [
-                  "ee_pose"
+                  "ee_pose",
+                  "gripper_state",
+                  "newcube"
                 ],
-                "rgb": [
-                  "rgb"
-                ],
+                "rgb": [],
                 "depth": [],
                 "scan": [],
-                "rgb_pcd": []
+                "rgb_pcd": [
+                ]
             },
             "goal": {
                 "low_dim": [],
@@ -189,14 +190,7 @@
             },
             "rgb": {
                 "core_class": "VisualCore",
-                "core_kwargs": {
-                  "backbone_class": "R3MConv",
-                  "backbone_kwargs": {
-                    "r3m_model_class": "resnet18",
-                    "freeze": false,
-                    "pool_class": null
-                  }
-                },
+                "core_kwargs": {},
                 "obs_randomizer_class": null,
                 "obs_randomizer_kwargs": {}
             },
@@ -213,8 +207,29 @@
                 "obs_randomizer_kwargs": {}
             },
             "rgb_pcd": {
-                "core_class": null,
-                "core_kwargs": {},
+                "core_class": "PCDCore",
+                "core_kwargs": {
+                  "input_shape": [180, 320, 3],
+                  "backbone_class": "LocalPoolPointnet",
+                  "backbone_kwargs": {
+                    "local_coord": true,
+                    "c_dim": 32,
+                    "hidden_dim": 32,
+                    "plane_type": "grid",
+                    "grid_resolution": 32,
+                    "plane_resolution": 128,
+                    "unet3d": true,
+                    "unet3d_kwargs": {
+                      "num_levels": 6,
+                      "f_maps": 32, 
+                      "in_channels": 32,
+                      "out_channels": 128,
+                      "plane_resolution": 128
+                    },
+                    "unet": false
+                  },
+                  "pool_class": null
+                },
                 "obs_randomizer_class": null,
                 "obs_randomizer_kwargs": {}
             }

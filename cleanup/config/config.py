@@ -4,8 +4,8 @@ from .grasp import GraspConfig
 
 @dataclass
 class Config:
-    usd_info_path: str = "./data/bowl2sink_xform_mapping.yml"
-    usd_info: dict = field(default_factory=dict)  # Default to an empty dict
+    # usd_info_path: str = "./data/bowl2sink_xform_mapping.yml"
+    # usd_info: dict = field(default_factory=dict)  # Default to an empty dict
     usd_path: str = "./data/g60.usd"
 
     log_dir: str = "./logs"

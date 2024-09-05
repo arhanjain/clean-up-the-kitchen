@@ -17,7 +17,7 @@ from m2t2.meshcat_utils import (
     create_visualizer, make_frame, visualize_grasp, visualize_pointcloud
 )
 from pxr import Usd
-from config.grasp import GraspConfig
+from cleanup.config.grasp import GraspConfig
 import omni.isaac.lab.utils.math as math
 
 class Grasper:
@@ -49,7 +49,8 @@ class Grasper:
 
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
         quaternion = [0.0896, -0.7723, -0.6288,  0.0105]
-        position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
+        # position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
+        position = [0.559, 0.431, 0.166]
         return torch.tensor([position + quaternion]).float()
         # return self.get_manipulation(env, object_class, manipulation_type, viz)
 

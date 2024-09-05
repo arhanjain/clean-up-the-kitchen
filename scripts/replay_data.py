@@ -4,7 +4,7 @@ import numpy as np
 from moviepy.editor import ImageSequenceClip
 
 
-data = np.load("./data/g60_pick_remastered/episode_3.npz", allow_pickle=True)
+data = np.load("./data/calibed_g60_pick/episode_6.npz", allow_pickle=True)
 
 # viz = o3d.visualization.Visualizer()
 # viz.create_window()
@@ -15,7 +15,6 @@ data = np.load("./data/g60_pick_remastered/episode_3.npz", allow_pickle=True)
 
 vid = []
 for i in range(1, data["observations"].shape[0]):
-    breakpoint()
     img = data["observations"][i]["policy"]["rgb"].squeeze()[:, :, :3]
     vid.append(img)
     # geometry.points = o3d.utility.Vector3dVector(data["observations"][i]["policy"]["pcd"].reshape(-1, 3))

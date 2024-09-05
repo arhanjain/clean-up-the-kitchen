@@ -97,7 +97,7 @@
             "num_modes": 5,
             "min_std": 0.0001,
             "std_activation": "softplus",
-            "low_noise_eval": true
+            "low_noise_eval": false
         },
         "vae": {
             "enabled": false,
@@ -135,7 +135,7 @@
             ]
         },
         "rnn": {
-            "enabled": true,
+            "enabled": false,
             "horizon": 10,
             "hidden_dim": 400,
             "rnn_type": "LSTM",
@@ -164,6 +164,7 @@
         "modalities": {
             "obs": {
                 "low_dim": [
+                  "ee_pose"
                 ],
                 "rgb": [],
                 "depth": [],

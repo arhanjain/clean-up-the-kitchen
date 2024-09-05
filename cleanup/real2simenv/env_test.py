@@ -1,5 +1,3 @@
-
-import torch
 import numpy as np
 from config.config import Config
 import omni.isaac.lab.sim as sim_utils
@@ -16,24 +14,25 @@ from omni.isaac.lab.sensors import CameraCfg
 from omni.isaac.lab.scene import InteractiveSceneCfg
 from omni.isaac.lab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg, OffsetCfg
 from omni.isaac.lab.sim.spawners.from_files.from_files_cfg import GroundPlaneCfg, UsdFileCfg
-from omni.isaac.lab.utils import configclass
-from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
-from omni.isaac.lab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, RigidBodyPropertiesCfg
+from omni.isaac.lab.utils import configclass 
+from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR 
+from omni.isaac.lab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, RigidBodyPropertiesCfg 
 from omni.isaac.lab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
 from omni.isaac.lab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg
 from . import mdp
 
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
-
-from pxr import Usd, Sdf
-from .utils import usd_utils, misc_utils
-from .sensor import SiteCfg
 import omni.isaac.lab.utils.math as math
 
+from pxr import Usd, Sdf
+import torch
+from .utils import usd_utils, misc_utils
+from .sensor import SiteCfg
+
 @configclass
-class Real2SimSceneCfg(InteractiveSceneCfg):
-    """Configuration for the lift scene with a robot and a object.
+class TestCfg(InteractiveSceneCfg):
+    """ConfiguratiounitsResolven for the lift scene with a robot and a object.
     This is the abstract base implementation, the exact scene is defined in the derived classes
     which need to set the target object, robot and end-effector frames
     """
@@ -62,12 +61,19 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         width=320,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
-            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
+            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, # clipping_range=(0.1, 2.0)
         ),
         offset=CameraCfg.OffsetCfg(pos=(-0.10, -0.7, 0.32), rot=(0.77, 0.5, -0.23, -0.33), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
+
+    # scene = AssetBaseCfg(
+    #         prim_path="{ENV_REGEX_NS}/scene",
+    #         init_state=RigidObjectCfg.InitialStateCfg(pos=[0, 0, 0]),
+    #         spawn=UsdFileCfg(
+    #             usd_path="./data/g60.usd"
+    #     ))
 
     def __post_init__(self):
         # post init of parent
@@ -93,8 +99,13 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
             ],
         )
 
-    
+
+
     def setup(self, cfg: Config):
+
+    
+        usd_info = cfg.usd_info
+
         # parse and add USD
         objs = {}
         marker_cfg = FRAME_MARKER_CFG.copy()
@@ -150,7 +161,14 @@ class CommandsCfg:
 class ActionsCfg:
     """Action specifications for the MDP."""
 
-    body_joint_pos: DifferentialInverseKinematicsActionCfg | None = None
+    body_joint_pos: DifferentialInverseKinematicsActionCfg = DifferentialInverseKinematicsActionCfg(
+            asset_name="robot",
+            joint_names=["panda_joint.*"],
+            body_name="panda_hand",
+            controller=DifferentialIKControllerCfg(
+                command_type="pose", use_relative_mode=False, ik_method="dls"),
+            body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+            )
 
     finger_joint_pos: mdp.BinaryJointPositionActionCfg = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
@@ -159,7 +177,9 @@ class ActionsCfg:
         close_command_expr={"panda_finger_.*": 0.0},
     )
 
-    def setup(self, cfg: Config):
+
+
+    def setup(self, cfg):
         relative_mode = cfg.actions.type == "relative"
         
         action_cfg = DifferentialInverseKinematicsActionCfg(
@@ -182,6 +202,8 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
+        # joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        # joint_vel = ObsTerm(func=mdp.joint_vel_rel)
         ee_pose = ObsTerm(
             func=mdp.ee_pose,
         )
@@ -192,6 +214,24 @@ class ObservationsCfg:
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
         pcd = ObsTerm(func=mdp.get_point_cloud)
+        # shoulder_cam = ObsTerm(
+        #         func=mdp.camera_rgb,
+        #         )
+        # object_position = ObsTerm(
+        #     func=mdp.object_position_in_robot_root_frame,
+        #     params={"object_cfg": SceneEntityCfg("blue_cube")}
+        
+
+        # object_position = ObsTerm(
+        #     func=mdp.object_position_in_robot_root_frame,
+        #     params={"object_cfg": SceneEntityCfg("Xform_266")}
+        # )
+        # target_object_position = ObsTerm(func=mdp.generated_commands, params={"command_name": "object_pose"})
+
+        # actions = ObsTerm(func=mdp.last_action)
+        # rgb, seg, depth = ObsTerm(func=mdp.get_camera_data)
+        # seg = ObsTerm(func=mdp.get_camera_data, params={"type": "semantic_segmentation"})
+        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
 
 
         def __post_init__(self):
@@ -203,7 +243,16 @@ class ObservationsCfg:
     
     def setup(self, cfg):
         usd_info = cfg.usd_info
-        # TODO: dynamically add all objects from USD as state observations
+        # for name in usd_info["xforms"]:
+        #     setattr(self.policy, name, ObsTerm(
+        #             func=mdp.object_position_in_robot_root_frame, 
+        #             params={"object_cfg": SceneEntityCfg(name)}
+        #             ))
+        # for name in usd_info["sites"]:
+        #     setattr(self.policy, name, ObsTerm(
+        #             func=mdp.object_position_in_robot_root_frame, 
+        #             params={"object_cfg": SceneEntityCfg(name)}
+        #             ))
 
 
 @configclass
@@ -211,12 +260,13 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-
+    #
     reset_object_position = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.1, 0.1), "y": (-0.0, 0.1), "z": (0.0, 0.0)},
+            "pose_range": {"x": (-0.1, 0.1), "y": (-0.1, 0.1), "z": (0.0, 0.0),
+                           "pitch": (-np.pi, np.pi)},
             "velocity_range": {},
             "asset_cfg": SceneEntityCfg("newcube"),
         },
@@ -274,11 +324,11 @@ class CurriculumCfg:
 
 
 @configclass
-class Real2SimCfg(ManagerBasedRLEnvCfg):
+class TestEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # # Scene settings
-    scene = Real2SimSceneCfg(num_envs=4, env_spacing=3)
+    scene = TestCfg(num_envs=4, env_spacing=3)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
