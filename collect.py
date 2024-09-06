@@ -33,17 +33,11 @@ from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from planning.orchestrator import Orchestrator
-from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 from config import Config
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(cfg: Config):
-    # Load configuration
-    with open(cfg.usd_info_path, "r") as usd_info_file:
-        usd_info = yaml.safe_load(usd_info_file)
-        cfg.usd_info = usd_info
-
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
@@ -62,6 +56,7 @@ def main(cfg: Config):
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
 
+
     # apply wrappers
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
@@ -73,8 +68,7 @@ def main(cfg: Config):
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-        # ("grasp", {"target":"bowl"}),
-        ("grasp", {"target": "newcube"}),
+            ("rollout", {"instruction": "pick up the cube", "horizon": 100}),
     ]
 
     # Simulate environment

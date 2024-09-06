@@ -32,6 +32,6 @@ class Config:
 
     @dataclass
     class ActionConfig:
-        type: str = 'absolute'
+        type: str = 'relative'
     actions: ActionConfig = ActionConfig()
 

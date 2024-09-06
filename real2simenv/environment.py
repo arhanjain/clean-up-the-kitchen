@@ -32,7 +32,7 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
             gripper = torch.zeros((self.num_envs, 1), dtype=torch.float32).to(self.device)
             action = torch.cat((pos, quat, gripper), dim=1)
         else:
-            raise NotImplementedError
+            action = torch.tensor([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]]).to(self.device)
         
         obs, rew, done, trunc, info = self.step(action)
         return obs, info

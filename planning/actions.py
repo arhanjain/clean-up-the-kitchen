@@ -5,17 +5,21 @@ from enum import Enum
 from abc import abstractmethod
 from typing import Generator
 from dataclasses import dataclass
-from planning.grasp import Grasper
-from planning.motion_planner import MotionPlanner
-from curobo.util.usd_helper import UsdHelper
+# from planning.grasp import Grasper
+# from planning.motion_planner import MotionPlanner
+# from curobo.util.usd_helper import UsdHelper
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
+import json_numpy
+import requests
+json_numpy.patch()
 
 class ServiceName(Enum):
     GRASPER = "grasper"
     MOTION_PLANNER = "motion_planner"
+    OPEN_VLA = "open_vla"
 
 @dataclass(frozen=True)
 class Action:
@@ -204,5 +208,37 @@ class PlaceAction(Action, action_name="place"):
         go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
+
+
+@dataclass(frozen=True)
+class RolloutAction(Action, action_name="rollout"):
+    instruction: str
+    horizon: int = 7
+
+    def build(self, env):
+        # Ensure required services are registered
+        # model, processor = Action.get_service(ServiceName.OPEN_VLA)
+        #
+        for _ in range(self.horizon):
+            rgb, _, _, _ = env.get_camera_data()
+            # prompt = f"In: What action should the robot take to {self.instruction}?\nOut:"
+
+            action = requests.post(
+                    "http://0.0.0.0:8000/act",
+                    json = {
+                        "image": rgb.squeeze().astype(np.uint8),
+                        "instruction": self.instruction,
+                        "unnorm_key": "bridge_orig",
+                        }
+                    ).json()
+            yield torch.tensor(action).unsqueeze(0)
+
+        breakpoint()
+        yield 0
+
+        # inputs = processor(prompt, rgb).to("cuda:0", dtype=torch.bfloat16)
+        #
+        # for _ in range(self.horizon):
+        #     action = model.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
 
 
