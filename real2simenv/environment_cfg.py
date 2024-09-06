@@ -65,7 +65,9 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, # clipping_range=(0.1, 2.0)
         ),
         # offset=CameraCfg.OffsetCfg(pos=(-0.10, -0.7, 0.32), rot=(0.77, 0.5, -0.23, -0.33), convention="opengl"),
-        offset=CameraCfg.OffsetCfg(pos=(-0.46, -1.43, 1.23), rot=(0.809, 0.456, -0.1819, -0.32), convention="opengl"),
+        # offset=CameraCfg.OffsetCfg(pos=(-0.46, -1.43, 1.23), rot=(0.809, 0.456, -0.1819, -0.32), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.355, 0.855, 0.788), rot=(0.402, 0.245, -0.459, -0.753), convention="opengl"),
+
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -212,16 +214,16 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-
-    reset_object_position = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.1, 0.1), "y": (-0.0, 0.1), "z": (0.0, 0.0)},
-            "velocity_range": {},
-            "asset_cfg": SceneEntityCfg("newcube"),
-        },
-    )
+    #
+    # reset_object_position = EventTerm(
+    #     func=mdp.reset_root_state_uniform,
+    #     mode="reset",
+    #     params={
+    #         "pose_range": {"x": (-0.1, 0.1), "y": (-0.0, 0.1), "z": (0.0, 0.0)},
+    #         "velocity_range": {},
+    #         "asset_cfg": SceneEntityCfg("newcube"),
+    #     },
+    # )
 
 
 @configclass
