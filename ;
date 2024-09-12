@@ -1,2 +1,0 @@
-    action_min_rel = np.inf * np.ones(7)
-    action_max_rel = -np.inf * np.ones(7)

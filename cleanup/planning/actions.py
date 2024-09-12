@@ -112,18 +112,21 @@ class GraspAction(Action, action_name="grasp"):
 
         # Find successful plan
         traj = None
+        tries = 0
         while traj is None:
             # Get grasp pose
             success = torch.zeros(env.unwrapped.num_envs)
             grasp_pose = None
             while not torch.all(success):
-                grasp_pose, success = grasper.get_grasp(env, self.target)
+                grasp_pose, success = grasper.get_grasp(env, self.target, viz=True)
+                tries += 1
+                if tries > 10:
+                    return
 
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
             # Plan motion to pregrasp
             traj = planner.plan(pregrasp_pose, mode="ee_pose")
-
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -154,7 +157,7 @@ class GraspAction(Action, action_name="grasp"):
 @dataclass(frozen=True)
 class PlaceAction(Action, action_name="place"):
     target: str
-    GRASP_STEPS: int = 30
+    GRASP_STEPS: int = 7
 
     def build(self, env):
         # Ensure required services are registered
@@ -167,6 +170,7 @@ class PlaceAction(Action, action_name="place"):
         
         # Find successful plan
         traj = None
+        tries = 0
         while traj is None:
             # Get place pose
             # success = torch.zeros(env.unwrapped.num_envs)
@@ -179,6 +183,9 @@ class PlaceAction(Action, action_name="place"):
             preplace_pose = grasper.get_prepose(place_pose, 0.1)
             # Plan motion to pregrasp
             traj = planner.plan(preplace_pose, mode="ee_pose")
+            tries += 1
+            if tries > 10:
+                return
         
         # Go to preplace pose
         gripper_action = -1 * torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)

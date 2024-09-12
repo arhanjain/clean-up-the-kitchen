@@ -75,16 +75,22 @@ def main(cfg: Config):
     # plan_template = [
     #     ("grasp", {"target": "newcube"}),
     # ]
-    plan1 = [("grasp", {"target": "cup"}), ("place", {"target": "placeholder"})]
+    plan1 = [("grasp", {"target": "coke"}), ("place", {"target": "placeholder"})]
     plan2 = [("grasp", {"target": "cube"}), ("place", {"target": "placeholder"})]
-    plan3 = [("grasp", {"target": "tin"}), ("place", {"target": "placeholder"})]
-    plan4 = [("grasp", {"target": "apple"}), ("place", {"target": "placeholder"})]
+    plan3 = [("grasp", {"target": "ketchup"}), ("place", {"target": "placeholder"})]
+    plan4 = [("grasp", {"target": "cup"}), ("place", {"target": "placeholder"})]
 
     plans = [plan1, plan2, plan3, plan4]
     ep = 0
     # Simulate environment
     # with torch.inference_mode():
+    labels = open(f"./data/{args_cli.ds_name}/labels.txt", "w")
+    
     while simulation_app.is_running():
+        line = f"{ep}: {plans[ep % len(plans)]}"
+        line += f", camera_pos: {env.unwrapped.scene['camera'].data.pos_w}, camera_rot: {env.unwrapped.scene['camera'].data.quat_w_world}"
+        labels.write(line + "\n")
+        labels.flush()
         full_plan = orchestrator.generate_plan_from_template(plans[ep % len(plans)])
 
         # ignoring using torch inference mode for now
@@ -99,6 +105,7 @@ def main(cfg: Config):
 
         if not done and not trunc:
             env.reset()
+        ep += 1
 
     env.close()
 

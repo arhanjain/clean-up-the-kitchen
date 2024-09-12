@@ -94,7 +94,8 @@ class Grasper:
             rgb, seg, depth, meta_data = env.get_camera_data()
             data = rgb, seg, depth, meta_data
             data, outputs = self.load_and_predict_real(data, self._model, self._cfg, manipulation_type, obj_label=object_class)
-            (goal_pos, goal_quat), success = self.choose_manipulation(outputs, manipulation_type, object_class = object_class)
+            (goal_pos, goal_quat), success, temp = self.choose_manipulation(outputs, manipulation_type, object_class = object_class)
+
 
         if viz:
             self.visualize(data[0], {k: v[0] for k, v in outputs.items()})
@@ -102,6 +103,7 @@ class Grasper:
         if not torch.all(success):
             return (None, None), success
 
+        self.visualize(data[0], temp)
         return torch.cat([goal_pos, goal_quat], dim=1), success
 
     @staticmethod
@@ -359,7 +361,7 @@ class Grasper:
         }
 
         if 'object_label' in meta_data:
-            obj_mask = seg == label_map[meta_data['object_label']]
+            obj_mask = seg == label_map[meta_data['object_label']] if meta_data['object_label'] in label_map else seg
             obj_xyz, obj_rgb = xyz_world[obj_mask], rgb[obj_mask]
             obj_xyz_grid = torch.unique(
                 (obj_xyz[:, :2] / grid_res).round(), dim=0
@@ -504,26 +506,54 @@ class Grasper:
             if len(outputs[manipulation_type][i]) == 0:
                 successes.append(False)
                 continue
-            manipulations = np.concatenate(outputs[manipulation_type][i], axis=0)
-            manipulation_conf = np.concatenate(outputs[conf_key][i], axis=0)
-            manip_pos, _ = self.m2t2_grasp_to_pos_and_quat(torch.tensor(manipulations))
-            
+
+            avg_obj_pos = [obj.mean(dim=0)[:3, -1] for obj in outputs[manipulation_type][i]]
             target_obj_pos, _ = self._env.unwrapped.get_object_pose(object_class)
             target_obj_pos = target_obj_pos.cpu()
-            distances = torch.norm(manip_pos - target_obj_pos, dim=1)
+            distances = torch.norm(torch.stack(avg_obj_pos) - target_obj_pos, dim=1)
+            best_obj_idx = torch.argmin(distances)
+            if min(distances) > 0.19:
+                print("evertyhuing too far")
+                successes.append(False)
+                continue
 
-            sorted_manipulation_idxs = np.argsort(distances, axis=0)  # ascending order of distance
-            manipulations = manipulations[sorted_manipulation_idxs.tolist()]
-            best_manipulations.append(manipulations[0])
-            successes.append(True)
 
+
+            # manipulations = np.concatenate(outputs[manipulation_type][i], axis=0)
+            # manipulation_conf = np.concatenate(outputs[conf_key][i], axis=0)
+            manipulations = outputs[manipulation_type][i][best_obj_idx]
+            manipulation_conf = outputs[conf_key][i][best_obj_idx]
+            # manip_pos, _ = self.m2t2_grasp_to_pos_and_quat(torch.tensor(manipulations))
+            
+
+            # sorted_manipulation_idxs = np.argsort(distances, axis=0)  # ascending order of distance
+            # manipulations = manipulations[sorted_manipulation_idxs.tolist()]
+            # best_manipulations.append(manipulations[0])
+            # successes.append(True)
+            #
             # sorted_manipulation_idxs = np.argsort(manipulation_conf, axis=0)  # ascending order of confidence
             # manipulations = manipulations[sorted_manipulation_idxs]
+            chosen_idx = np.random.choice(len(manipulations), 1)
+            best_manipulations.append(manipulations[chosen_idx[0]])
             # best_manipulations.append(manipulations[-1])
-            # successes.append(True)
+            successes.append(True)
 
         # Convert manipulation poses from M2T2 form to Isaac form
-        best_manipulations = torch.tensor(best_manipulations)
+        if len(best_manipulations) == 0:
+            return (None, None), torch.tensor(successes), None
+
+        best_manipulations = torch.stack(best_manipulations)
+
+        # selected viz
+        viz_grasp = manipulations[chosen_idx[0]].unsqueeze(0)
+        viz_grasp_conf = manipulation_conf[chosen_idx[0]].unsqueeze(0)
+        viz_contact = outputs["grasp_contacts"][0][best_obj_idx][chosen_idx[0]].unsqueeze(0)
+
+        viz_dict = {
+            "grasps": [viz_grasp],
+            "grasp_confidence": [viz_grasp_conf],
+            "grasp_contacts": [viz_contact]
+        }
 
         if len(best_manipulations) == 0:
             pos, quat = torch.zeros(1, 1), torch.zeros(1, 1)
@@ -533,7 +563,7 @@ class Grasper:
             except:
                 breakpoint()
         
-        return (pos, quat), torch.tensor(successes)
+        return (pos, quat), torch.tensor(successes), viz_dict
 
     
     @staticmethod
@@ -562,12 +592,17 @@ class Grasper:
 
         # Unpack the tuple
         roll, pitch, yaw = euler_angles
-
+        
+        temp = roll
+        roll = -pitch
+        pitch = temp
         yaw -= np.pi/2  # rotate to account for rotated frame between M2T2 and Isaac
+        # roll -= np.pi/2
+        # pitch = -pitch 
 
         # Adjust the yaw angle
-        yaw = torch.where(yaw > np.pi/2, yaw - np.pi, yaw)
-        yaw = torch.where(yaw > np.pi/2, yaw + np.pi, yaw)
+        # yaw = torch.where(yaw > np.pi/2, yaw - np.pi, yaw)
+        # yaw = torch.where(yaw < -np.pi/2, yaw + np.pi, yaw)
 
         # Convert the adjusted Euler angles back to quaternion
         adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).view(-1, 4)
