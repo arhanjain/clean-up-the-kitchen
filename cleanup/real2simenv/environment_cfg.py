@@ -1,7 +1,7 @@
 
 import torch
 import numpy as np
-from config.config import Config
+from cleanup.config import Config
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
@@ -58,13 +58,16 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     camera = CameraCfg(
         prim_path="{ENV_REGEX_NS}/table_cam",
         update_period=0.1,
-        height=180,
-        width=320,
+        # height=180,
+        # width=320,
+        height=480,
+        width=640,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
-            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955, # clipping_range=(0.1, 2.0)
+            focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
-        offset=CameraCfg.OffsetCfg(pos=(-0.10, -0.7, 0.32), rot=(0.77, 0.5, -0.23, -0.33), convention="opengl"),
+        # offset=CameraCfg.OffsetCfg(pos=(0.82, 0.01, 0.43), rot=(-0.63, -0.33, -0.33, -0.62), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.355, 0.855, 0.788), rot=(0.402, 0.245, -0.459, -0.753), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -80,7 +83,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
-            debug_vis=True,
+            debug_vis=False,
             visualizer_cfg=marker_cfg,
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
@@ -191,7 +194,7 @@ class ObservationsCfg:
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        pcd = ObsTerm(func=mdp.get_point_cloud)
+        # pcd = ObsTerm(func=mdp.get_point_cloud)
 
 
         def __post_init__(self):
@@ -202,8 +205,15 @@ class ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
     
     def setup(self, cfg):
-        usd_info = cfg.usd_info
         # TODO: dynamically add all objects from USD as state observations
+        stage = Usd.Stage.Open(cfg.usd_path)
+        for prim in stage.GetDefaultPrim().GetChildren():
+            name = prim.GetName()
+            term = ObsTerm(
+                    func= mdp.object_pose_in_robot_root_frame,
+                    params={"object_cfg": SceneEntityCfg(name)}
+                    )
+            setattr(self.policy, name, term)
 
 
 @configclass
@@ -212,15 +222,62 @@ class EventCfg:
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
 
-    reset_object_position = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.1, 0.1), "y": (-0.0, 0.1), "z": (0.0, 0.0)},
-            "velocity_range": {},
-            "asset_cfg": SceneEntityCfg("newcube"),
-        },
-    )
+    # reset_object_position = EventTerm(
+    #     func=mdp.reset_root_state_uniform,
+    #     mode="reset",
+    #     params={
+    #         "pose_range": {"x": (-0.05, 0.05), "y": (-0.2, 0.2), "z": (0.0, 0.0)},
+    #         "velocity_range": {},
+    #         "asset_cfg": SceneEntityCfg("newcube"),
+    #     },
+    # )
+    # reset_ketchup = EventTerm(
+    #         func=mdp.reset_root_state_uniform,
+    #         mode="reset",
+    #         params={
+    #             "pose_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (0.0, 0.0)},
+    #             "velocity_range": {},
+    #             "asset_cfg": SceneEntityCfg("ketchup"),
+    #             },
+    #         )
+    #
+    # reset_cube = EventTerm(
+    #         func=mdp.reset_root_state_uniform,
+    #         mode="reset",
+    #         params={
+    #             "pose_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (0.0, 0.0)},
+    #             "velocity_range": {},
+    #             "asset_cfg": SceneEntityCfg("cube"),
+    #             },
+    #         )
+    # reset_cup = EventTerm(
+    #         func=mdp.reset_root_state_uniform,
+    #         mode="reset",
+    #         params={
+    #             "pose_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (0.0, 0.0)},
+    #             "velocity_range": {},
+    #             "asset_cfg": SceneEntityCfg("cup"),
+    #             },
+    #         )
+    # reset_coke = EventTerm(
+    #         func=mdp.reset_root_state_uniform,
+    #         mode="reset",
+    #         params={
+    #             "pose_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (0.0, 0.0)},
+    #             "velocity_range": {},
+    #             "asset_cfg": SceneEntityCfg("coke"),
+    #             },
+    #         )
+    #
+    reset_camera = EventTerm(
+            func=mdp.reset_cam,
+            mode="reset",
+            params={
+                "pose_range": {"x": (-0.2, 0.2), "y": (-0.5, 0.5), "z": (-0.4, 0.4)},
+                "velocity_range": {},
+                "asset_cfg": SceneEntityCfg("camera"),
+            },
+            )
 
 
 @configclass
@@ -293,7 +350,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 10 # 10 hz for control/step
-        self.episode_length_s = 8.0
+        self.episode_length_s = 20.0
         # simulation settings
         self.sim.dt = 0.01  # 100Hz for physx
 

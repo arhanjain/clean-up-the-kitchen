@@ -7,7 +7,6 @@ import argparse
 
 from pxr import Usd
 from omni.isaac.lab.utils import math
-breakpoint()
 
 def GUI_matrix_to_pos_and_quat(matrix: torch.Tensor):
     '''

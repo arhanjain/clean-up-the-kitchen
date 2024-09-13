@@ -3,7 +3,7 @@ from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
 import torch
 from openai import OpenAI
-from config import Config
+from cleanup.config import Config
 import yaml
 import re
 

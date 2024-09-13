@@ -5,8 +5,8 @@ from enum import Enum
 from abc import abstractmethod
 from typing import Generator
 from dataclasses import dataclass
-from planning.grasp import Grasper
-from planning.motion_planner import MotionPlanner
+from cleanup.planning.grasp import Grasper
+from cleanup.planning.motion_planner import MotionPlanner
 from curobo.util.usd_helper import UsdHelper
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
@@ -117,13 +117,12 @@ class GraspAction(Action, action_name="grasp"):
             success = torch.zeros(env.unwrapped.num_envs)
             grasp_pose = None
             while not torch.all(success):
-                grasp_pose, success = grasper.get_grasp(env, self.target)
+                grasp_pose, success = grasper.get_grasp(env, self.target, viz=True)
 
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
             # Plan motion to pregrasp
             traj = planner.plan(pregrasp_pose, mode="ee_pose")
-
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -154,7 +153,7 @@ class GraspAction(Action, action_name="grasp"):
 @dataclass(frozen=True)
 class PlaceAction(Action, action_name="place"):
     target: str
-    GRASP_STEPS: int = 30
+    GRASP_STEPS: int = 7
 
     def build(self, env):
         # Ensure required services are registered
