@@ -212,7 +212,7 @@ class PlaceAction(Action, action_name="place"):
 @dataclass(frozen=True)
 class RolloutAction(Action, action_name="rollout"):
     instruction: str
-    horizon: int = 7
+    horizon: int = 50
 
     def build(self, env):
         # Ensure required services are registered
@@ -220,7 +220,6 @@ class RolloutAction(Action, action_name="rollout"):
         #
         for _ in range(self.horizon):
             rgb, _, _, _ = env.get_camera_data()
-            # prompt = f"In: What action should the robot take to {self.instruction}?\nOut:"
 
             action = requests.post(
                     "http://0.0.0.0:8000/act",
@@ -231,13 +230,4 @@ class RolloutAction(Action, action_name="rollout"):
                         }
                     ).json()
             yield torch.tensor(action).unsqueeze(0)
-
-        breakpoint()
-        yield 0
-
-        # inputs = processor(prompt, rgb).to("cuda:0", dtype=torch.bfloat16)
-        #
-        # for _ in range(self.horizon):
-        #     action = model.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
-
 

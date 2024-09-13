@@ -69,7 +69,7 @@ def main(cfg: Config):
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-            ("rollout", {"instruction": "reach far forward, then pickup the cup", "horizon": 100}),
+            ("rollout", {"instruction": "pick up the cube", "horizon": 50}),
     ]
 
     # Simulate environment
