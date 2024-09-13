@@ -43,11 +43,14 @@ def main(cfg: Config):
 
 
 def test():
-    env = RobotEnv()
-    env.reset(randomize=False)
+    env = RobotEnv(do_reset=False)
+    breakpoint()
+    # env.reset(randomize=False)
 
     # from Image
+    from moviepy.editor import ImageSequenceClip
     import cv2
+    import time
     import requests
     import json_numpy
     json_numpy.patch()
@@ -64,37 +67,38 @@ def test():
     #     trust_remote_code=True
     # ).to("cuda:0")
     # 
+    video = []
     for i in range(100):
+        t = time.time()
         obs = env.get_observation() 
+        print(f"Observation Time: {time.time()-t}")
+
         images = obs["image"]
         combined_image = [v for k, v in images.items()]
         combined_image = np.concatenate(combined_image, axis=1)
-        instruction = "pick up the carrot"
+        instruction = "pick up the pot"
 
         cv2.imshow("realsense_view", cv2.cvtColor(combined_image, cv2.COLOR_BGR2RGB))
         cv2.waitKey(1)
 
-        # Grab image input & format prompt
-        # image = Image.fromarray(combined_image)
-        # prompt = f"In: What action should the robot take to {instruction.lower()}?\nOut:"
-
-        # Predict Action (7-DoF; un-normalize for BridgeData V2)
-        # inputs = processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)
-        # action = vla.predict_action(**inputs, unnorm_key="utaustin_mutex", do_sample=False)
-        # gripper_act = obs["robot_state"]["gripper_position"]/0.08 
+        t = time.time()
         action = requests.post(
             "http://0.0.0.0:8000/act",
             json={"image": combined_image, 
                   "instruction": instruction,
                   "unnorm_key": "utaustin_mutex"}
         ).json()
-        print(action, type(action))
-        # action = np.array(action)
+        print(f"Pred Time: {time.time()-t}")
 
-    #     breakpoint()
-    #     print(action)
-    #     env.step(action)
-    #
+        print(action)
+        action = action.copy()
+        # action[-1] = -action[-1]
+        action[-1] = ((1 - action[-1])-0.5)*2
+        env.step(action)
+        video.append(combined_image)
+    
+    # write video to disk
+    ImageSequenceClip(video, fps=30).write_videofile(str("./data/latest_realworld.mp4"), codec="libx264", fps=10)
 
 if __name__ == "__main__":
     # main()
