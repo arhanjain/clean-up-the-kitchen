@@ -519,23 +519,10 @@ class Grasper:
 
 
 
-            # manipulations = np.concatenate(outputs[manipulation_type][i], axis=0)
-            # manipulation_conf = np.concatenate(outputs[conf_key][i], axis=0)
             manipulations = outputs[manipulation_type][i][best_obj_idx]
             manipulation_conf = outputs[conf_key][i][best_obj_idx]
-            # manip_pos, _ = self.m2t2_grasp_to_pos_and_quat(torch.tensor(manipulations))
-            
-
-            # sorted_manipulation_idxs = np.argsort(distances, axis=0)  # ascending order of distance
-            # manipulations = manipulations[sorted_manipulation_idxs.tolist()]
-            # best_manipulations.append(manipulations[0])
-            # successes.append(True)
-            #
-            # sorted_manipulation_idxs = np.argsort(manipulation_conf, axis=0)  # ascending order of confidence
-            # manipulations = manipulations[sorted_manipulation_idxs]
             chosen_idx = np.random.choice(len(manipulations), 1)
             best_manipulations.append(manipulations[chosen_idx[0]])
-            # best_manipulations.append(manipulations[-1])
             successes.append(True)
 
         # Convert manipulation poses from M2T2 form to Isaac form
@@ -597,12 +584,6 @@ class Grasper:
         roll = -pitch
         pitch = temp
         yaw -= np.pi/2  # rotate to account for rotated frame between M2T2 and Isaac
-        # roll -= np.pi/2
-        # pitch = -pitch 
-
-        # Adjust the yaw angle
-        # yaw = torch.where(yaw > np.pi/2, yaw - np.pi, yaw)
-        # yaw = torch.where(yaw < -np.pi/2, yaw + np.pi, yaw)
 
         # Convert the adjusted Euler angles back to quaternion
         adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).view(-1, 4)
