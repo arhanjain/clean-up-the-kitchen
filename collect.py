@@ -24,19 +24,20 @@ simulation_app = app_launcher.app
 
 import torch
 import time
-import hydra
-import gymnasium as gym
-import real2simenv
+import hydra 
+import gymnasium as gym 
+import cleanup.real2simenv 
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
-from planning.orchestrator import Orchestrator
+from cleanup.planning.orchestrator import Orchestrator
 import yaml
-from config import Config
+from cleanup.config import Config
+import cleanup.real2simenv as real2simenv
 
-@hydra.main(version_base=None, config_path="./config", config_name="config")
+@hydra.main(version_base=None, config_path="./cleanup/config", config_name="config")
 def main(cfg: Config):
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
@@ -73,15 +74,14 @@ def main(cfg: Config):
 
     # Simulate environment
     # with torch.inference_mode():
+    
     while simulation_app.is_running():
         full_plan = orchestrator.generate_plan_from_template(plan_template)
 
         # ignoring using torch inference mode for now
-        last_action = None
         done, trunc = False, False
         for segment in full_plan:
             obs, rew, done, trunc, info = env.step(segment)
-            last_action = segment
             if done or trunc:
                 print("Done or truncated!")
                 break
