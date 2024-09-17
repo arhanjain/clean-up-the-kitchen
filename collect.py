@@ -69,7 +69,8 @@ def main(cfg: Config):
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-            ("rollout", {"instruction": "pick up the cube", "horizon": 50}),
+            # ("rollout", {"instruction": "pick up the carrot", "horizon": 250}),
+            ("grasp", {"target": "carrot"}),
     ]
 
     # Simulate environment
@@ -81,6 +82,7 @@ def main(cfg: Config):
         # ignoring using torch inference mode for now
         done, trunc = False, False
         for segment in full_plan:
+            print(segment) 
             obs, rew, done, trunc, info = env.step(segment)
             if done or trunc:
                 print("Done or truncated!")

@@ -52,7 +52,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     # lights
     light = AssetBaseCfg(
         prim_path="/World/light",
-        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
+        spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0),
     )
 
     camera = CameraCfg(
@@ -66,8 +66,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
-        # offset=CameraCfg.OffsetCfg(pos=(0.82, 0.01, 0.43), rot=(-0.63, -0.33, -0.33, -0.62), convention="opengl"),
-        offset=CameraCfg.OffsetCfg(pos=(-0.355, 0.855, 0.788), rot=(0.402, 0.245, -0.459, -0.753), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.168, -0.544, 0.552), rot=(0.73, 0.497, -0.267, -0.391), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -193,8 +192,8 @@ class ObservationsCfg:
                         )
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
-        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        # pcd = ObsTerm(func=mdp.get_point_cloud)
+        depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
+        pcd = ObsTerm(func=mdp.get_point_cloud)
 
 
         def __post_init__(self):
@@ -302,7 +301,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 10 # 10 hz for control/step
-        self.episode_length_s = 20.0
+        self.episode_length_s = 20
         # simulation settings
         self.sim.dt = 0.01  # 100Hz for physx
 

@@ -1,5 +1,5 @@
-# from .grasp import Grasper
-# from .motion_planner import MotionPlanner
+from .grasp import Grasper
+from .motion_planner import MotionPlanner
 from .actions import Action, ServiceName
 import torch
 from openai import OpenAI
@@ -32,12 +32,12 @@ class Orchestrator:
     '''
     def __init__(self, env, cfg: Config):
         self.env = env
-        # self.grasper = Grasper(
-        #         env,
-        #         cfg.grasp,
-        #         cfg.usd_path,
-        #         )
-        # self.motion_planner = MotionPlanner(env)
+        self.grasper = Grasper(
+                env,
+                cfg.grasp,
+                cfg.usd_path,
+                )
+        self.motion_planner = MotionPlanner(env)
         
         # openvla_processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
         # openvla = AutoModelForVision2Seq.from_pretrained(
@@ -47,8 +47,8 @@ class Orchestrator:
         #     low_cpu_mem_usage=True, 
         #     trust_remote_code=True
         # ).to("cuda:0")
-        # Action.register_service(ServiceName.GRASPER, self.grasper)
-        # Action.register_service(ServiceName.MOTION_PLANNER, self.motion_planner)
+        Action.register_service(ServiceName.GRASPER, self.grasper)
+        Action.register_service(ServiceName.MOTION_PLANNER, self.motion_planner)
         # Action.register_service(ServiceName.OPEN_VLA, (openvla, openvla_processor))
 
     

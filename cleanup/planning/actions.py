@@ -126,7 +126,7 @@ class GraspAction(Action, action_name="grasp"):
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
             # Plan motion to pregrasp
-            traj = planner.plan(pregrasp_pose, mode="ee_pose")
+            traj = planner.plan(pregrasp_pose, mode="ee_pose_rel")
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -229,5 +229,12 @@ class RolloutAction(Action, action_name="rollout"):
                         "unnorm_key": "bridge_orig",
                         }
                     ).json()
+            
+            # transform gripper action from 0-1 to -1, 1
+            action = action.copy()
+            gripper = action[-1]
+            gripper = 2 * gripper - 1
+            action[-1] = gripper
+        
             yield torch.tensor(action).unsqueeze(0)
 
