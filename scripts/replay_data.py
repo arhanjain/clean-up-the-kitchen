@@ -22,8 +22,8 @@ args = arg_parser.parse_args()
 # viz.add_geometry(geometry)
 folder = Path(args.data_path)
 (folder/"viz").mkdir(exist_ok=True)
-trajs = folder.glob("*.npz")
-chosen = random.sample(list(trajs), 10)
+trajs = list(folder.glob("*.npz"))
+chosen = random.sample(trajs, min(10, len(trajs)))
 # chosen = ["./data/nvidia_trial/episode_22.npz"]
 for idx,path in enumerate(tqdm(chosen)):
     data = np.load(path, allow_pickle=True)

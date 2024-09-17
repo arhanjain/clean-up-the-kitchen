@@ -108,7 +108,7 @@ class MotionPlanner:
         self.kin_model = CudaRobotModel(robot_cfg.kinematics)
         self.env = env
 
-    def plan(self, goal, mode="ee_pose") -> torch.Tensor | None:
+    def plan(self, goal, mode="ee_pose_abs") -> torch.Tensor | None:
         '''
         Creates a plan to reach the goal position from the current joint position.
         Supports multiple environments, denoted as N.
@@ -171,10 +171,13 @@ class MotionPlanner:
         # Return in desired format
         if mode == "joint_pos":
             return traj
-        elif mode == "ee_pose":
+        elif "ee_pose" in mode:
             ee_trajs = [self.kin_model.get_state(t.position) for t in traj]
             ee_trajs = self.format_plan(ee_trajs)
-            return ee_trajs 
+            if mode == "ee_pose_abs":
+                return ee_trajs 
+            elif mode == "ee_pose_rel":
+                breakpoint()
         else:
             raise ValueError("Invalid mode...")
 

@@ -6,6 +6,7 @@ from openai import OpenAI
 from cleanup.config import Config
 import yaml
 import re
+from transformers import AutoModelForVision2Seq, AutoProcessor
 
 class Orchestrator:
     '''
@@ -37,9 +38,18 @@ class Orchestrator:
                 cfg.usd_path,
                 )
         self.motion_planner = MotionPlanner(env)
-
+        
+        # openvla_processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
+        # openvla = AutoModelForVision2Seq.from_pretrained(
+        #     "openvla/openvla-7b", 
+        #     attn_implementation="flash_attention_2",  # [Optional] Requires `flash_attn`
+        #     torch_dtype=torch.bfloat16, 
+        #     low_cpu_mem_usage=True, 
+        #     trust_remote_code=True
+        # ).to("cuda:0")
         Action.register_service(ServiceName.GRASPER, self.grasper)
         Action.register_service(ServiceName.MOTION_PLANNER, self.motion_planner)
+        # Action.register_service(ServiceName.OPEN_VLA, (openvla, openvla_processor))
 
     
     def generate_plan_from_template(self, plan_template):

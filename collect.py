@@ -33,17 +33,12 @@ from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from cleanup.planning.orchestrator import Orchestrator
-# from scripts.xform_mapper import GUI_matrix_to_pos_and_quat
 import yaml
 from cleanup.config import Config
+import cleanup.real2simenv as real2simenv
 
 @hydra.main(version_base=None, config_path="./cleanup/config", config_name="config")
 def main(cfg: Config):
-    # Load configuration
-    # with open(cfg.usd_info_path, "r") as usd_info_file:
-    #     usd_info = yaml.safe_load(usd_info_file)
-    #     cfg.usd_info = usd_info
-
     # create environment configuration
     env_cfg: real2simenv.Real2SimCfg = parse_env_cfg(
         args_cli.task,
@@ -62,6 +57,7 @@ def main(cfg: Config):
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
 
+
     # apply wrappers
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
@@ -72,40 +68,28 @@ def main(cfg: Config):
 
 
     orchestrator = Orchestrator(env, cfg)
-    # plan_template = [
-    #     ("grasp", {"target": "newcube"}),
-    # ]
-    plan1 = [("grasp", {"target": "coke"}), ("place", {"target": "placeholder"})]
-    plan2 = [("grasp", {"target": "cube"}), ("place", {"target": "placeholder"})]
-    plan3 = [("grasp", {"target": "ketchup"}), ("place", {"target": "placeholder"})]
-    plan4 = [("grasp", {"target": "cup"}), ("place", {"target": "placeholder"})]
+    plan_template = [
+            # ("rollout", {"instruction": "pick up the carrot", "horizon": 250}),
+            ("grasp", {"target": "carrot"}),
+    ]
 
-    plans = [plan1, plan2, plan3, plan4]
-    ep = 0
     # Simulate environment
     # with torch.inference_mode():
-    labels = open(f"./data/{args_cli.ds_name}/labels.txt", "w")
     
     while simulation_app.is_running():
-        line = f"{ep}: {plans[ep % len(plans)]}"
-        line += f", camera_pos: {env.unwrapped.scene['camera'].data.pos_w}, camera_rot: {env.unwrapped.scene['camera'].data.quat_w_world}"
-        labels.write(line + "\n")
-        labels.flush()
-        full_plan = orchestrator.generate_plan_from_template(plans[ep % len(plans)])
+        full_plan = orchestrator.generate_plan_from_template(plan_template)
 
         # ignoring using torch inference mode for now
-        last_action = None
         done, trunc = False, False
         for segment in full_plan:
+            print(segment) 
             obs, rew, done, trunc, info = env.step(segment)
-            last_action = segment
             if done or trunc:
                 print("Done or truncated!")
                 break
 
         if not done and not trunc:
             env.reset()
-        ep += 1
 
     env.close()
 

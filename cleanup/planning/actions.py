@@ -12,10 +12,14 @@ from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
+import json_numpy
+import requests
+json_numpy.patch()
 
 class ServiceName(Enum):
     GRASPER = "grasper"
     MOTION_PLANNER = "motion_planner"
+    OPEN_VLA = "open_vla"
 
 @dataclass(frozen=True)
 class Action:
@@ -122,7 +126,7 @@ class GraspAction(Action, action_name="grasp"):
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
             # Plan motion to pregrasp
-            traj = planner.plan(pregrasp_pose, mode="ee_pose")
+            traj = planner.plan(pregrasp_pose, mode="ee_pose_rel")
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -204,4 +208,33 @@ class PlaceAction(Action, action_name="place"):
         for _ in range(self.GRASP_STEPS):
             yield go_to_pregrasp
 
+
+@dataclass(frozen=True)
+class RolloutAction(Action, action_name="rollout"):
+    instruction: str
+    horizon: int = 50
+
+    def build(self, env):
+        # Ensure required services are registered
+        # model, processor = Action.get_service(ServiceName.OPEN_VLA)
+        #
+        for _ in range(self.horizon):
+            rgb, _, _, _ = env.get_camera_data()
+
+            action = requests.post(
+                    "http://0.0.0.0:8000/act",
+                    json = {
+                        "image": rgb.squeeze().astype(np.uint8),
+                        "instruction": self.instruction,
+                        "unnorm_key": "bridge_orig",
+                        }
+                    ).json()
+            
+            # transform gripper action from 0-1 to -1, 1
+            action = action.copy()
+            gripper = action[-1]
+            gripper = 2 * gripper - 1
+            action[-1] = gripper
+        
+            yield torch.tensor(action).unsqueeze(0)
 

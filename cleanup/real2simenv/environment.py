@@ -35,7 +35,7 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         elif self.custom_cfg.actions.type == "relative":
             action = torch.tensor([[0,0,0,0,0,0,1]], dtype=torch.float32).to(self.device)
         else:
-            raise NotImplementedError
+            action = torch.tensor([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]]).to(self.device)
         
         obs, rew, done, trunc, info = self.step(action)
         return obs, info
