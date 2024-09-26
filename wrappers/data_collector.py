@@ -12,6 +12,10 @@ class DataCollector(gym.Wrapper):
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
+        # temporary way to extract camera intrinsics
+        # intrinsics = self.env.scene["camera"].data.intrinsic_matrices[0].cpu().numpy()
+    
+    
         metadata = {
                 "action_space": env.action_space,
                 "obs_space": env.observation_space,
@@ -37,7 +41,6 @@ class DataCollector(gym.Wrapper):
 
     def step(self, action):
         obs, rew, done, trunc, info = self.env.step(action)
-        
         for i in range(self.env.num_envs):
             self.buffer[i]["observations"].append(self.to_numpy(self._last_obs, idx=i))
             self.buffer[i]["actions"].append(self.to_numpy(action, idx=i))
@@ -54,16 +57,14 @@ class DataCollector(gym.Wrapper):
         return obs, rew, done, trunc, info
     
     def _save_buffer(self):
-        if len(self.buffer[0]["observations"]) < self.LEN_THRESHOLD:
-            return
-
-        # iterate through each env instance and save the buffer
-        for i in range(self.env.num_envs):
-            np.savez(
-                    file = self.save_dir / f'episode_{self.ep}.npz', 
-                    **self.buffer[i]
-                    )
-            self.ep += 1
+        if len(self.buffer[0]["observations"]) >= self.LEN_THRESHOLD:
+            # iterate through each env instance and save the buffer
+            for i in range(self.env.num_envs):
+                np.savez(
+                        file = self.save_dir / f'episode_{self.ep}.npz', 
+                        **self.buffer[i]
+                        )
+                self.ep += 1
 
         self._reset_buffer()
 
