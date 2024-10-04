@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from cleanup.planning.grasp import Grasper
 from cleanup.planning.motion_planner import MotionPlanner
 from curobo.util.usd_helper import UsdHelper
-from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
-import omni.isaac.lab.sim as sim_utils
+from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
 import json_numpy
@@ -219,8 +218,8 @@ class RolloutAction(Action, action_name="rollout"):
         # model, processor = Action.get_service(ServiceName.OPEN_VLA)
         #
         for _ in range(self.horizon):
-            rgb, _, _, _ = env.get_camera_data()
-            rgb = [img.astype(np.uint8) for img in rgb]
+            rgb, _, _, _ = env.get_camera_data().astype(np.uint8).squeeze()
+            # rgb = [img.astype(np.uint8) for img in rgb]
             action = requests.post(
                     "http://0.0.0.0:8000/act",
                     json = {
