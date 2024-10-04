@@ -4,3 +4,6 @@
 [submodule "droid"]
 	path = droid
 	url = git@github.com:arhanjain/droid.git
+[submodule "openvla"]
+	path = openvla
+	url = git@github.com:openvla/openvla.git
