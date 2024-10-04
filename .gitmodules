@@ -7,3 +7,6 @@
 [submodule "openvla"]
 	path = openvla
 	url = git@github.com:openvla/openvla.git
+[submodule "rlds_dataset_builder"]
+	path = rlds_dataset_builder
+	url = git@github.com:arhanjain/rlds_dataset_builder.git

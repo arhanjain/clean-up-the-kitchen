@@ -2,7 +2,7 @@
 import torch
 import numpy as np
 from cleanup.config import Config
-import omni.isaac.lab.sim as sim_utils
+import omni.isaac.lab.sim as sim_utils 
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
 from omni.isaac.lab.envs import ManagerBasedRLEnvCfg
 from omni.isaac.lab.managers import CurriculumTermCfg as CurrTerm
@@ -60,13 +60,13 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         update_period=0.1,
         # height=180,
         # width=320,
-        height=480,
-        width=640,
+        height=224,
+        width=224,
         data_types=["rgb", "distance_to_image_plane", "semantic_segmentation"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
-        offset=CameraCfg.OffsetCfg(pos=(-0.168, -0.544, 0.552), rot=(0.73, 0.497, -0.267, -0.391), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.01, -0.51, 0.72), rot=(0.763, 0.428, -0.236, -0.422), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -162,16 +162,22 @@ class ActionsCfg:
     )
 
     def setup(self, cfg: Config):
-        relative_mode = cfg.actions.type == "relative"
-        
-        action_cfg = DifferentialInverseKinematicsActionCfg(
-            asset_name="robot",
-            joint_names=["panda_joint.*"],
-            body_name="panda_hand",
-            controller=DifferentialIKControllerCfg(
-                command_type="pose", use_relative_mode=relative_mode, ik_method="dls"),
-            body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
-        )
+        if cfg.actions.type == "joint_pos":
+            action_cfg = mdp.JointPositionActionCfg(
+                use_default_offset=False,
+                asset_name="robot",
+                joint_names=["panda_joint.*"],
+            )
+        else:
+            relative_mode = cfg.actions.type == "relative"
+            action_cfg = DifferentialInverseKinematicsActionCfg(
+                asset_name="robot",
+                joint_names=["panda_joint.*"],
+                body_name="panda_hand",
+                controller=DifferentialIKControllerCfg(
+                    command_type="pose", use_relative_mode=relative_mode, ik_method="dls"),
+                body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+            )
 
         setattr(self, "body_joint_pos", action_cfg)
 
@@ -192,8 +198,8 @@ class ObservationsCfg:
                         )
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
-        depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        pcd = ObsTerm(func=mdp.get_point_cloud)
+        # depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
+        # pcd = ObsTerm(func=mdp.get_point_cloud)
 
 
         def __post_init__(self):
@@ -220,6 +226,16 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    reset_carrot = EventTerm(
+            func=mdp.reset_root_state_with_random_orientation,
+            mode="reset",
+            params={
+                # "pose_range": {"x": (-0.1, 0.1), "y": (-0.12, 0.2), "z": (0.2, 0.22)}, # normal
+                "pose_range": {"x": (-0.025, 0.025), "y": (-0.025, 0.025), "z": (0.0, 0.0)}, # easy
+                "velocity_range": {},
+                "asset_cfg": SceneEntityCfg("carrot"),
+            },
+            )
     # reset_camera = EventTerm(
     #         func=mdp.reset_cam,
     #         mode="reset",
@@ -286,7 +302,7 @@ class Real2SimCfg(ManagerBasedRLEnvCfg):
     """Configuration for the lifting environment."""
 
     # # Scene settings
-    scene = Real2SimSceneCfg(num_envs=4, env_spacing=3)
+    scene = Real2SimSceneCfg(num_envs=4, env_spacing=10)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
