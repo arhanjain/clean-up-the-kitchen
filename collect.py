@@ -11,7 +11,6 @@ parser.add_argument(
     "--num_envs", type=int, default=1, help="Number of environments to simulate."
 )
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
-parser.add_argument("--ds_name", type=str, required=True, help="Name of the dataset.")
 
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args() 
@@ -61,35 +60,35 @@ def main(cfg: Config):
     # apply wrappers
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
-    env = DataCollector(env, cfg.data_collection, save_dir=f"data/{args_cli.ds_name}")
+    env = DataCollector(env, cfg.data_collection, save_dir=f"data/{cfg.data_collection.ds_name}")
 
     # Reset environment
     env.reset()
-
+    time.sleep(0.1)
+    env.reset()
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-            # ("rollout", {"instruction": "pick up the carrot", "horizon": 250}),
-            ("grasp", {"target": "carrot"}),
+            # ("reach", {"target": "carrot"}),
+            ("rollout", {"instruction": "pick up the carrot", "horizon": 40}),
+            # ("replay", {"filepath": "./data/pick_carrot/episode_0_rel.npz"}),
     ]
 
     # Simulate environment
     # with torch.inference_mode():
-    
     while simulation_app.is_running():
-        full_plan = orchestrator.generate_plan_from_template(plan_template)
+        with torch.inference_mode():
+            full_plan = orchestrator.generate_plan_from_template(plan_template)
+            done, trunc = False, False
+            for segment in full_plan:
+                print(segment)
+                obs, rew, done, trunc, info = env.step(segment)
+                if done or trunc:
+                    print("Done or truncated!")
+                    break
 
-        # ignoring using torch inference mode for now
-        done, trunc = False, False
-        for segment in full_plan:
-            print(segment) 
-            obs, rew, done, trunc, info = env.step(segment)
-            if done or trunc:
-                print("Done or truncated!")
-                break
-
-        if not done and not trunc:
-            env.reset()
+            if not done and not trunc:
+                env.reset()
 
     env.close()
 

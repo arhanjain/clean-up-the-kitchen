@@ -62,6 +62,8 @@ def gripper_state(
 ) -> torch.Tensor:
     robot: RigidObject = env.scene[robot_cfg.name]
     gripper_state = robot.data.joint_pos[:, -2:]
+    # TODO: convert [a,b] to [-1, 1]
+    # torch.max(gripper_state, torch.tensor(0.0))
     return gripper_state
 
 def ee_pose(
