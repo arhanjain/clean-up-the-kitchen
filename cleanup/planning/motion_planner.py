@@ -1,4 +1,5 @@
 import torch
+import omni.isaac.lab.utils.math as math
 # CuRobo 
 from curobo.geom.sdf.world import CollisionCheckerType 
 from curobo.geom.types import WorldConfig, Cuboid, Material, Mesh
@@ -177,6 +178,27 @@ class MotionPlanner:
             if mode == "ee_pose_abs":
                 return ee_trajs 
             elif mode == "ee_pose_rel":
+                # ee_pos, ee_quat = ee_trajs[:, :-1, :3], ee_trajs[:, :-1, 3:]
+                # next_ee_pos, next_ee_quat = ee_trajs[:, 1:, :3], ee_trajs[:, 1:, 3:]
+                # delta_pos = next_ee_pos - ee_pos
+                # 
+                # ee_euler = []
+                # next_ee_euler = []
+                # for i in range(ee_quat.shape[0]):
+                #     prev = math.euler_xyz_from_quat(ee_quat[i])
+                #     next_ = math.euler_xyz_from_quat(next_ee_quat[i])
+                #     prev = torch.stack(prev, dim=-1)
+                #     next_ = torch.stack(next_, dim=-1)
+                #     ee_euler.append(prev)
+                #     next_ee_euler.append(next_)
+                # ee_euler = torch.stack(ee_euler)
+                # next_ee_euler = torch.stack(next_ee_euler)
+                # delta_euler = next_ee_euler - ee_euler
+                # 
+                # traj = torch.cat((delta_pos, delta_euler), dim=2)
+                # return traj
+                # ee_trajs[1:] = ee_trajs[1:] - ee_trajs[:-1]
+                # return ee_trajs[1:]
                 breakpoint()
         else:
             raise ValueError("Invalid mode...")

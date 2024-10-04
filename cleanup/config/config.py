@@ -32,7 +32,9 @@ class Config:
 
     @dataclass
     class DataCollectionConfig:
+        ds_name: str = "test"
         max_episodes: int = 200
+        save: bool = True
     data_collection: DataCollectionConfig = DataCollectionConfig()
 
     @dataclass

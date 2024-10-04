@@ -220,13 +220,13 @@ class RolloutAction(Action, action_name="rollout"):
         #
         for _ in range(self.horizon):
             rgb, _, _, _ = env.get_camera_data()
-
+            rgb = [img.astype(np.uint8) for img in rgb]
             action = requests.post(
                     "http://0.0.0.0:8000/act",
                     json = {
-                        "image": rgb.squeeze().astype(np.uint8),
+                        "image": rgb,
                         "instruction": self.instruction,
-                        "unnorm_key": "bridge_orig",
+                        # "unnorm_key": "bridge_orig",
                         }
                     ).json()
             
@@ -237,4 +237,53 @@ class RolloutAction(Action, action_name="rollout"):
             action[-1] = gripper
         
             yield torch.tensor(action).unsqueeze(0)
+
+
+@dataclass(frozen=True)
+class ReachAction(Action, action_name="reach"):
+    target: str
+
+    def build(self, env):
+        planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
+        # grasper: Grasper = Action.get_service(ServiceName.GRASPER)
+        if planner is None:
+            raise ValueError("Motion planner service not found")
+        # if grasper is None: 
+        #     raise ValueError("Grasper service not found")
+        
+        planner.update()
+
+        # Find successful plan
+        traj = None
+        while traj is None:
+            # Get grasp pose
+            success = torch.zeros(env.unwrapped.num_envs)
+            grasp_pos, grasp_quat = env.get_object_pose(self.target)
+            # grasp_pos = torch.tensor([[0.383,  0.0094,  0.4203]]).cuda()
+            grasp_pose = torch.cat((grasp_pos, torch.tensor([[-0.0661,  0.9559, -0.0315,  0.2843]]).cuda()), dim=-1)
+            # Get pregrasp pose
+            pregrasp_pose = Grasper.get_prepose(grasp_pose, 0.2)
+            print(pregrasp_pose)
+            # Plan motion to pregrasp
+            traj = planner.plan(pregrasp_pose, mode="ee_pose_rel")
+
+        # Go to pregrasp pose
+        gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
+        traj = torch.cat((traj, gripper_action), dim=2)
+        # for pose_idx in range(traj.shape[1]):
+
+
+
+@dataclass(frozen=True)
+class ReplayAction(Action, action_name="replay"):
+    filepath: str
+
+    def build(self, env):
+        traj = dict(np.load(self.filepath, allow_pickle=True))
+        for step in range(traj["observations"].shape[0]):
+            act = traj["actions"][step][None]
+            yield torch.tensor(act)
+
+
+
 
