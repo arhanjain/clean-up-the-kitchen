@@ -10,3 +10,6 @@
 [submodule "rlds_dataset_builder"]
 	path = rlds_dataset_builder
 	url = git@github.com:arhanjain/rlds_dataset_builder.git
+[submodule "droid_policy_learning"]
+	path = droid_policy_learning
+	url = git@github.com:droid-dataset/droid_policy_learning.git
