@@ -1,5 +1,24 @@
 # clean-up-the-kitchen
 
+**Teleoperation**
+
+`python teleop.py --task Real2Sim --ds_name [DS_NAME] usd_path=[USDPATH] actions.type=[relative/absolute] --enable_cameras --headless`
+
+**Collect Motion Planned Trajetories**
+
+`todo`
+
+**Rollout models in simulation**
+
+`python collect.py --task Real2Sim usd_path=./data/basement_flat.usd data_collection.save=False actions.type="relative"`
+
+**Rollout models in real-world**
+
+`python deploy_real.py`
+
+
+
+
 1. Clone this repo!
 2. Create conda/mamba environment with `conda create -n real2sim python=3.10` or `micromamba create -n real2sim python=3.10`
 3. Activate the environment: `conda activate real2sim`
