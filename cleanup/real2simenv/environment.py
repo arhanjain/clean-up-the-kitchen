@@ -151,7 +151,8 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         # save_dir = "./data"
         # everything should be numpy
         # Remove 4th channel for rgb
-        rgb = rgb[..., :-1].cpu().numpy()
+        # rgb = rgb[..., -1].cpu().numpy()
+        rgb = rgb.cpu().numpy()
         seg = seg
         depth = depth.cpu().numpy()
 

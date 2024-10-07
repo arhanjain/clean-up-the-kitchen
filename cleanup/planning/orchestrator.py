@@ -37,7 +37,7 @@ class Orchestrator:
         #         cfg.grasp,
         #         cfg.usd_path,
         #         )
-        self.motion_planner = MotionPlanner(env)
+        # self.motion_planner = MotionPlanner(env)
         
         # openvla_processor = AutoProcessor.from_pretrained("openvla/openvla-7b", trust_remote_code=True)
         # openvla = AutoModelForVision2Seq.from_pretrained(
@@ -48,7 +48,7 @@ class Orchestrator:
         #     trust_remote_code=True
         # ).to("cuda:0")
         # Action.register_service(ServiceName.GRASPER, self.grasper)
-        Action.register_service(ServiceName.MOTION_PLANNER, self.motion_planner)
+        # Action.register_service(ServiceName.MOTION_PLANNER, self.motion_planner)
         # Action.register_service(ServiceName.OPEN_VLA, (openvla, openvla_processor))
 
     

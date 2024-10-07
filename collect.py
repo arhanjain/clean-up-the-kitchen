@@ -70,7 +70,7 @@ def main(cfg: Config):
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
             # ("reach", {"target": "carrot"}),
-            ("rollout", {"instruction": "pick up the carrot", "horizon": 40}),
+            ("rollout", {"instruction": "pick up the carrot", "horizon": 60}),
             # ("replay", {"filepath": "./data/pick_carrot/episode_0_rel.npz"}),
     ]
 

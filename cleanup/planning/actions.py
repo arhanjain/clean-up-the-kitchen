@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from cleanup.planning.grasp import Grasper
 from cleanup.planning.motion_planner import MotionPlanner
 from curobo.util.usd_helper import UsdHelper
-from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg import omni.isaac.lab.sim as sim_utils
+from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg 
+import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
 import json_numpy
@@ -217,17 +218,22 @@ class RolloutAction(Action, action_name="rollout"):
         # Ensure required services are registered
         # model, processor = Action.get_service(ServiceName.OPEN_VLA)
         #
+        last_img = None
         for _ in range(self.horizon):
-            rgb, _, _, _ = env.get_camera_data().astype(np.uint8).squeeze()
+            rgb = env.get_camera_data()[0].astype(np.uint8).squeeze()
             # rgb = [img.astype(np.uint8) for img in rgb]
+            if last_img is None:
+                last_img = rgb
+            obs_horizon = np.stack([last_img, rgb])
             action = requests.post(
                     "http://0.0.0.0:8000/act",
                     json = {
-                        "image": rgb,
+                        "image": obs_horizon,
                         "instruction": self.instruction,
                         # "unnorm_key": "bridge_orig",
                         }
                     ).json()
+            last_img = rgb
             
             # transform gripper action from 0-1 to -1, 1
             action = action.copy()
