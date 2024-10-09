@@ -1,6 +1,6 @@
 [submodule "robomimic"]
 	path = robomimic
-	url = git@github.com:ARISE-Initiative/robomimic.git
+	url = git@github.com:arhanjain/robomimic.git
 [submodule "droid"]
 	path = droid
 	url = git@github.com:arhanjain/droid.git
