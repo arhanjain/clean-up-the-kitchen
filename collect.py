@@ -61,36 +61,23 @@ def main(cfg: Config):
     # apply wrappers
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
-    env = DataCollector(env, cfg.data_collection, save_dir=f"data/{args_cli.ds_name}")
+    env = DataCollector(env, cfg.data_collection, env_cfg, save_dir=f"data/", ds_name=args_cli.ds_name, env_name=args_cli.task)
 
-    # Reset environment
     env.reset()
 
 
     orchestrator = Orchestrator(env, cfg)
-    plan_template = [
-            # ("rollout", {"instruction": "pick up the carrot", "horizon": 250}),
-            ("grasp", {"target": "carrot"}),
-    ]
-
     # Simulate environment
-    # with torch.inference_mode():
-    
     while simulation_app.is_running():
-        full_plan = orchestrator.generate_plan_from_template(plan_template)
-
-        # ignoring using torch inference mode for now
         done, trunc = False, False
-        for segment in full_plan:
+        for segment in orchestrator.run():
             print(segment) 
             obs, rew, done, trunc, info = env.step(segment)
             if done or trunc:
                 print("Done or truncated!")
                 break
-
         if not done and not trunc:
             env.reset()
-
     env.close()
 
 

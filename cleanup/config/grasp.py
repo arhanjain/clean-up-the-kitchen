@@ -11,7 +11,7 @@ class GraspConfig:
     @dataclass
     class GraspData:
         root_dir: str = ''
-        num_points: int = 25000
+        num_points: int = 16384
         num_object_points: int = 1024
         world_coord: bool = True
         num_rotations: int = 8
@@ -155,7 +155,7 @@ class GraspConfig:
     @dataclass
     class Eval:
         data_dir: str = ''
-        checkpoint: str = '/home/arhan/Downloads/m2t2.pth'
+        checkpoint: str = '/home/raymond/Downloads/m2t2.pth'
         mask_thresh: float = 0.4
         object_thresh: float = 0.4
         num_runs: int = 1

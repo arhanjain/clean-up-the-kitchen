@@ -19,6 +19,16 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         self.custom_cfg = custom_cfg
         super().__init__(*args, **kwargs)
 
+        # set default root state for all rigid bodies (read current position and right to default_root_state attribute)
+        for rigid_object in self.scene.rigid_objects.values():
+            root_state = rigid_object.data.root_state_w.clone()
+            rigid_object.data.default_root_state = root_state 
+        for articulation_asset in self.scene.articulations.values():
+            # obtain default and deal with the offset for env origins
+            # breakpoint()
+            root_state = articulation_asset.data.root_state_w.clone()
+            articulation_asset.data.default_root_state = root_state
+
 
     # TODO: this is a hacky solution which steps on reset to rerender camera,
     # There must be a better way to do this
@@ -64,7 +74,6 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         joint_pos = self.scene["robot"].data.joint_pos[:, robot_entity_cfg.joint_ids]
         joint_vel = self.scene["robot"].data.joint_vel[:, robot_entity_cfg.joint_ids]
         joint_names = self.scene["robot"].data.joint_names
-
         return joint_pos, joint_vel, joint_names
 
     def get_object_pose(self, object_name: str):
@@ -151,7 +160,7 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         # save_dir = "./data"
         # everything should be numpy
         # Remove 4th channel for rgb
-        rgb = rgb[..., :-1].cpu().numpy()
+        rgb = rgb.cpu().numpy()
         seg = seg
         depth = depth.cpu().numpy()
 

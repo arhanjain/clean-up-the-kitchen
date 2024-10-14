@@ -23,6 +23,7 @@ def object_pose_in_robot_root_frame(
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     object_cfg: SceneEntityCfg = SceneEntityCfg("object"),
 ) -> torch.Tensor:
+    breakpoint()
     """The position of the object in the robot's root frame."""
     robot: RigidObject = env.scene[robot_cfg.name]
     object: RigidObject = env.scene[object_cfg.name]
@@ -46,15 +47,12 @@ def get_point_cloud(
     camera_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
 ) -> torch.Tensor:
     intrinsics = env.scene[camera_cfg.name].data.intrinsic_matrices
-    depth = env.scene[camera_cfg.name].data.output["distance_to_image_plane"]
-
+    depth = env.scene[camera_cfg.name].data.output["distance_to_image_plane"].squeeze(-1)
     raw_pcd = misc_utils.depth_to_xyz(depth, intrinsics)
     return raw_pcd[0]
     # mask = torch.isfinite(raw_pcd).all(dim=-1)
     # filtered_pcd = raw_pcd[mask]
     # return filtered_pcd.view(-1, 3)
-
-
 
 def gripper_state(
     env: ManagerBasedRLEnv,
@@ -63,6 +61,17 @@ def gripper_state(
     robot: RigidObject = env.scene[robot_cfg.name]
     gripper_state = robot.data.joint_pos[:, -2:]
     return gripper_state
+
+def get_joint_info(
+    env: ManagerBasedRLEnv,
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    robot: RigidObject = env.scene[robot_cfg.name]
+    joint_pos = robot.data.joint_pos[:, robot_cfg.joint_ids]
+    joint_vel = robot.data.joint_vel[:, robot_cfg.joint_ids]
+    joint_info = torch.cat((joint_pos, joint_vel), dim=-1)
+    return joint_info
+
 
 def ee_pose(
     env: ManagerBasedRLEnv,
@@ -83,3 +92,12 @@ def ee_pose(
     )
 
     return torch.cat((ee_pos_b, ee_quat_b), dim=1)
+
+def get_handle_pose(env) -> torch.Tensor:
+    handle_id, handle_name = env.scene["kitchen01"].find_bodies("drawer_16_handle")
+    
+    handle_location = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, :3] 
+    handle_orientation = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, 3:7]
+    
+    return torch.cat((handle_location, handle_orientation), dim=-1)
+

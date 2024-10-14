@@ -1,6 +1,7 @@
-
 import torch
 import numpy as np
+import os
+import yaml
 from cleanup.config import Config
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg
@@ -21,8 +22,10 @@ from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 from omni.isaac.lab.sim.schemas.schemas_cfg import CollisionPropertiesCfg, RigidBodyPropertiesCfg
 from omni.isaac.lab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
 from omni.isaac.lab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg
+from omni.isaac.lab.utils import math as math_utils
+from omni.isaac.lab.actuators import ImplicitActuatorCfg
 from . import mdp
-
+from omni.isaac.lab.sim.schemas import ArticulationRootPropertiesCfg
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
@@ -30,6 +33,7 @@ from pxr import Usd, Sdf
 from .utils import usd_utils, misc_utils
 from .sensor import SiteCfg
 import omni.isaac.lab.utils.math as math
+from omni.isaac.core.utils.stage import get_current_stage
 
 @configclass
 class Real2SimSceneCfg(InteractiveSceneCfg):
@@ -39,7 +43,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     """
     # robots: will be populated by agent env cfg
     robot: ArticulationCfg = FRANKA_PANDA_HIGH_PD_CFG.replace(
-        prim_path="{ENV_REGEX_NS}/Robot"
+        prim_path="{ENV_REGEX_NS}/Robot",
     )
 
     # plane
@@ -66,17 +70,88 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
-        offset=CameraCfg.OffsetCfg(pos=(-0.168, -0.544, 0.552), rot=(0.73, 0.497, -0.267, -0.391), convention="opengl"),
+        # offset=CameraCfg.OffsetCfg(pos=(-0.23, 0.93, 0.66486), rot=(-0.2765, -0.20009, 0.5544, 0.75905), convention="opengl"), # old env
+        offset=CameraCfg.OffsetCfg(pos=(0.93854, -0.03254, 0.90233), rot=(0.88574, 0.39354, 0.0986, 0.22553), convention="opengl"), # kitchen
+        # offset=CameraCfg.OffsetCfg(pos=(-0.59371, -1.10056, 0.76485), rot=(0.75146, 0.53087, -0.22605, -0.31999), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
-
+    
     def __post_init__(self):
-        # post init of parent
         super().__post_init__()
-        # # end-effector sensor: will be populated by agent env cfg
-        # ee_frame: FrameTransformerCfg = MISSING
-        # Listens to the required transforms
+        self.load_kitchen_config()
+        self.initialize_ee_frame()
+    
+    def load_kitchen_config(self):
+        # Load the YAML file
+        with open('/home/raymond/projects/clean-up-the-kitchen/cleanup/config/kitchen01.yaml', 'r') as f:
+            kitchen_cfg = yaml.safe_load(f)
+        current_path = os.getcwd()
+        articulation_objects = kitchen_cfg['params'].get('ArticulationObject', {})
+        rigid_objects = kitchen_cfg['params'].get('RigidObject', {})
+        # Process the objects
+        self.process_articulation_objects(articulation_objects, current_path)
+        self.process_rigid_objects(rigid_objects, current_path)
+
+    def process_articulation_objects(self, articulation_objects, current_path):
+        for object_name, object_config in articulation_objects.items():
+            axes = object_config["rot"]["axis"]
+            angles = object_config["rot"]["angles"]
+            quat = self.obtain_target_cam_quat(axes, angles)
+            articulate_cfg = ArticulationCfg(
+                prim_path="{ENV_REGEX_NS}/" + f"{object_config['name']}",
+                spawn=sim_utils.UsdFileCfg(
+                    usd_path=os.path.join(current_path, object_config['path']),
+                    activate_contact_sensors=False,
+                    rigid_props=RigidBodyPropertiesCfg(
+                        disable_gravity=object_config.get("disable_gravity", False),
+                        max_depenetration_velocity=5.0,
+                    ),
+                    articulation_props=ArticulationRootPropertiesCfg(
+                        enabled_self_collisions=object_config.get("enabled_self_collisions", False),
+                        solver_position_iteration_count=8,
+                        solver_velocity_iteration_count=0
+                    ),
+                    scale=object_config.get("scale", [1, 1, 1])
+                ),
+                init_state=ArticulationCfg.InitialStateCfg(
+                    pos=object_config.get("pos", [0, 0, 0]),
+                    rot=quat,
+                    joint_pos=object_config.get("joints", {})
+                ),
+                actuators={
+                    f"{object_config['name']}": ImplicitActuatorCfg(
+                        joint_names_expr=[*object_config.get("joints", {}).keys()],
+                        effort_limit=87.0,
+                        velocity_limit=100.0,
+                        stiffness=0.0,
+                        damping=0.0,
+                        friction=20.0,
+                    ),
+                },
+            )
+            setattr(self, object_config['name'], articulate_cfg)
+
+    def process_rigid_objects(self, rigid_objects, current_path):
+        for object_name, object_config in rigid_objects.items():
+            axes = object_config["rot"]["axis"]
+            angles = object_config["rot"]["angles"]
+            quat = self.obtain_target_cam_quat(axes, angles)
+            rigid_object_cfg = RigidObjectCfg(
+                prim_path="{ENV_REGEX_NS}/" + f"{object_name}",
+                spawn=sim_utils.UsdFileCfg(
+                    usd_path=os.path.join(current_path, object_config['path']),
+                    scale=object_config.get('scale', [1, 1, 1])
+                ),
+                init_state=RigidObjectCfg.InitialStateCfg(
+                    pos=object_config.get('pos', [0, 0, 0]),
+                    rot=quat,
+                )
+            )
+            setattr(self, object_name, rigid_object_cfg)
+    
+    def initialize_ee_frame(self):
+        # Initialize the end-effector frame or any other components
         marker_cfg = FRAME_MARKER_CFG.copy()
         marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
         marker_cfg.prim_path = "/Visuals/FrameTransformer"
@@ -91,47 +166,28 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
                     offset=OffsetCfg(
                         pos=[0.0, 0.0, 0.0],
                     ),
-             ),
+                ),
             ],
         )
 
-    
-    def setup(self, cfg: Config):
-        # parse and add USD
-        objs = {}
-        marker_cfg = FRAME_MARKER_CFG.copy()
-        marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-        marker_cfg.prim_path = "/Visuals/FrameTransformer"
+    def obtain_target_cam_quat(self, axis, angles):
+        quat_list = []
+        for index, cam_axis in enumerate(axis):
+            euler_xyz = torch.zeros(3)
+            
+            euler_xyz[cam_axis] = angles[index]
+            quat_list.append(
+                math_utils.quat_from_euler_xyz(euler_xyz[0], euler_xyz[1],
+                                            euler_xyz[2]))
+        if len(quat_list) == 1:
+            return torch.as_tensor(quat_list[0], dtype=torch.float16)
+        else:
+            target_quat = quat_list[0]
+            for index in range(len(quat_list) - 1):
 
-
-
-        stage = Usd.Stage.Open(cfg.usd_path)
-        for prim in stage.GetDefaultPrim().GetChildren():
-            sub_path = prim.GetPath().pathString
-            pos = prim.GetAttribute("xformOp:translate").Get()
-            rot = prim.GetAttribute("xformOp:orient").Get()
-            pos = (pos[0], pos[1], pos[2])
-            quat = torch.tensor((rot.GetReal(), rot.GetImaginary()[0], rot.GetImaginary()[1], rot.GetImaginary()[2]))
-
-            euler = math.euler_xyz_from_quat(quat.unsqueeze(0))
-            quat = math.quat_from_euler_xyz(euler[0]+np.pi/2, euler[1], euler[2])
-            quat = quat[0]
-
-            name = prim.GetName()
-            objs[name] = RigidObjectCfg(
-                prim_path=f"{{ENV_REGEX_NS}}/{name}",
-                init_state=RigidObjectCfg.InitialStateCfg(pos=pos, rot=quat),
-                spawn=usd_utils.CustomRigidUSDCfg(
-                    usd_path=cfg.usd_path,
-                    usd_sub_path=sub_path,
-                    semantic_tags=[("class", name)],
-                )
-            )
-
-        for k, v in objs.items():
-            setattr(self, k, v)
-
-
+                target_quat = math_utils.quat_mul(quat_list[index + 1],
+                                                target_quat)
+            return torch.as_tensor(target_quat, dtype=torch.float16)
 
 @configclass
 class CommandsCfg:
@@ -190,11 +246,16 @@ class ObservationsCfg:
         gripper_state = ObsTerm(
                 func=mdp.gripper_state,
                         )
+        joint_state = ObsTerm(
+            func = mdp.get_joint_info,
+        )
+        handle_pose = ObsTerm(
+            func=mdp.get_handle_pose
+        )
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        pcd = ObsTerm(func=mdp.get_point_cloud)
-
+        # pcd = ObsTerm(func=mdp.get_point_cloud)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -203,16 +264,18 @@ class ObservationsCfg:
     # observation groups
     policy: PolicyCfg = PolicyCfg()
     
-    def setup(self, cfg):
-        # TODO: dynamically add all objects from USD as state observations
-        stage = Usd.Stage.Open(cfg.usd_path)
-        for prim in stage.GetDefaultPrim().GetChildren():
-            name = prim.GetName()
-            term = ObsTerm(
-                    func= mdp.object_pose_in_robot_root_frame,
-                    params={"object_cfg": SceneEntityCfg(name)}
-                    )
-            setattr(self.policy, name, term)
+    # def setup(self, cfg):
+    #     # TODO: dynamically add all objects from USD as state observations
+    #     stage = Usd.Stage.Open(cfg.usd_path)
+    #     for prim in stage.GetDefaultPrim().GetChildren():
+    #         name = prim.GetName()
+    #         if not name in ['light', 'scene_mat', 'sektion', ]: # temp fix
+    #             term = ObsTerm(
+    #                     func= mdp.object_pose_in_robot_root_frame,
+    #                     params={"object_cfg": SceneEntityCfg(name)}
+    #                     )
+    #             setattr(self.policy, name, term)
+        
 
 
 @configclass

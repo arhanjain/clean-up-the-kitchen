@@ -126,7 +126,7 @@ class GraspAction(Action, action_name="grasp"):
             # Get pregrasp pose
             pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
             # Plan motion to pregrasp
-            traj = planner.plan(pregrasp_pose, mode="ee_pose_rel")
+            traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -181,7 +181,7 @@ class PlaceAction(Action, action_name="place"):
             # Get pregrasp pose
             preplace_pose = grasper.get_prepose(place_pose, 0.1)
             # Plan motion to pregrasp
-            traj = planner.plan(preplace_pose, mode="ee_pose")
+            traj = planner.plan(preplace_pose, mode="ee_pose_abs")
         
         # Go to preplace pose
         gripper_action = -1 * torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
@@ -238,3 +238,93 @@ class RolloutAction(Action, action_name="rollout"):
         
             yield torch.tensor(action).unsqueeze(0)
 
+
+@dataclass(frozen=True)
+class OpenDrawerAction(Action, action_name="open_drawer"):
+    GRASP_STEPS: int = 7
+    delta_x: float = 0.1  # Adjust as needed for how far you want to open the drawer
+
+    def build(self, env):
+        # Ensure required services are registered
+        grasper: Grasper = Action.get_service(ServiceName.GRASPER)
+        planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
+        if grasper is None:
+            raise ValueError("Grasper service not found")
+        if planner is None:
+            raise ValueError("Motion planner service not found")
+
+        planner.update()
+
+        # Hard code the values of the handle
+        pos = [0.4030,  0.4921,  0.1737]
+        quat = [0.5,  -0.5, 0.5, -0.5]
+        grasp_pose = torch.tensor([pos + quat]).float()
+        grasp_pose = grasp_pose.to(env.unwrapped.device)
+
+        # Get pregrasp pose
+        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+        traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
+        if traj is None:
+            raise ValueError("Failed to plan to pregrasp pose")
+
+        # Go to pregrasp pose
+        gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
+        traj = torch.cat((traj, gripper_action), dim=2)
+        for pose_idx in range(traj.shape[1]):
+            yield traj[:, pose_idx]
+        print("going to grasp")
+
+        # # Go to grasp pose
+        # opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        # go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1)
+        # for _ in range(self.GRASP_STEPS):
+        #     yield go_to_grasp
+
+        # Close gripper
+        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        close_gripper = torch.cat((pregrasp_pose, closed_gripper), dim=1)
+        for _ in range(self.GRASP_STEPS):
+            yield close_gripper
+        
+        planner.attach_obj('/World/envs/env_0/kitchen01/drawer_16_handle/handle')
+        planner.update()
+
+        go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        for _ in range(self.GRASP_STEPS):
+            go_to_pregrasp[:, 0] -= 0.04
+            go_to_pregrasp[:, 1] += 0.01
+            yield go_to_pregrasp
+        
+
+
+        # pullout_pose = pregrasp_pose.clone()
+        # pullout_pose[0][0] -= 0.3
+        # # Move to pullout_pose to open the drawer
+        # closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        # traj = torch.cat((traj, closed_gripper), dim=2)  # Shape: [1, traj_len, 8]
+        # for pose_idx in range(traj.shape[1]):
+        #     yield traj[:, pose_idx]
+
+        # # Define letgo_pose (e.g., move up slightly)
+        # letgo_pose = .pullout_poseclone()  # Shape: [7]
+        # letgo_pose[2] += 0.05  # Move up by 5 cm
+
+        # # Plan to letgo_pose
+        # traj = planner.plan(letgo_pose, mode="ee_pose_abs")
+        # if traj is None:
+        #     raise ValueError("Failed to plan to letgo pose")
+
+        # # Move to letgo_pose
+        # traj = torch.cat((traj, gripper_action), dim=2)  # Continue holding the gripper closed
+        # for pose_idx in range(traj.shape[1]):
+        #     yield traj[:, pose_idx]
+
+        # Open gripper to release the handle
+        go_to_pregrasp[:, -1] = 1
+        for _ in range(self.GRASP_STEPS):
+            yield go_to_pregrasp
+
+        # planner.update()
+        # # If you attached the drawer earlier, detach it now
+        # planner.detach_obj()
+        

@@ -1,0 +1,72 @@
+params:
+  ArticulationObject:
+    kitchen:
+      name: kitchen01
+      path: "./data/kitchen01.usda"
+      scale: [2, 2, 2]
+      pos: [-0.2, 0.4, 0.8]
+      rot:
+        axis: [0, 1, 2]
+        angles: [-0.025, 0.21, -0.23]
+      disable_gravity: True
+      enabled_self_collisions: False
+      joints:
+        drawer_revolute_joint_0: 0.0
+        drawer_revolute_joint_1: 0.0
+        drawer_revolute_joint_2: 0.0
+        drawer_revolute_joint_3: 0.0
+        drawer_revolute_joint_6: 0.0
+        drawer_revolute_joint_7: -0.0
+        drawer_revolute_joint_8: 0.0
+        drawer_revolute_joint_9: -0.0
+        drawer_revolute_joint_11: -0.0
+        drawer_revolute_joint_12: 0.0
+        drawer_revolute_joint_13: -0.0
+        drawer_revolute_joint_15: 0.0
+        drawer_revolute_joint_17: -0.0
+        drawer_revolute_joint_19: 0.0
+        drawer_revolute_joint_21: -0.0
+        #revolute_joint
+        drawer_prismatic_joint_4: 0.0
+        drawer_prismatic_joint_5: 0.0
+        drawer_prismatic_joint_14: 0.0
+        drawer_prismatic_joint_16: 0.0
+        drawer_prismatic_joint_18: 0.0
+        drawer_prismatic_joint_20: 0.0
+
+  RigidObject:
+    mustard_bottle:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/006_mustard_bottle.usd"
+      scale: [1, 1, 1]
+      pos: [0.6, 0.27962, 0.4]
+      rot:
+        axis: [0]
+        angles: [-1.57]
+    master_chef_can:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/002_master_chef_can.usd"
+      scale: [1, 1, 1]
+      pos: [0.79216, 0.43599, 0.4]
+      rot:
+        axis: [0]
+        angles: [-1.57]
+    sugar_box:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/004_sugar_box.usd"
+      scale: [1, 1, 1]
+      pos: [0.77422, 0.8843, 0.4]
+      rot:
+        axis: [0]
+        angles: [-1.57]
+    tomato_soup_can:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/005_tomato_soup_can.usd"
+      scale: [1, 1, 1]
+      pos: [0.63666, 0.53243, 0.4]
+      rot:
+        axis: [0]
+        angles: [-1.57]
+    bowl:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/024_bowl.usd"
+      scale: [1, 1, 1]
+      pos: [0.45997, 0.54244, 0.4]
+      rot:
+        axis: [0]
+        angles: [-1.57]

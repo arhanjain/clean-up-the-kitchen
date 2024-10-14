@@ -167,7 +167,6 @@ class MotionPlanner:
 
         # Extract the trajectories based on single vs batch
         traj = [result.interpolated_plan] if len(ik_goal) == 1 else result.get_paths()
-
         # Return in desired format
         if mode == "joint_pos":
             return traj
@@ -247,7 +246,6 @@ class MotionPlanner:
 
         obstacles = self.motion_gen.world_model
         obj_path = [obs.name for obs in obstacles if obj_name in obs.name]
-
         assert len(obj_path) > 0, f"Object {obj_name} not found in the world"
 
         self.motion_gen.attach_objects_to_robot(

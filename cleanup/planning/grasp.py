@@ -19,6 +19,9 @@ from m2t2.meshcat_utils import (
 from pxr import Usd
 from cleanup.config.grasp import GraspConfig
 import omni.isaac.lab.utils.math as math
+from PIL import Image
+import matplotlib.pyplot as plt
+import matplotlib
 
 class Grasper:
     '''
@@ -50,12 +53,20 @@ class Grasper:
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
         quaternion = [0.0896, -0.7723, -0.6288,  0.0105]
         # position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
-        position = [0.559, 0.431, 0.166]
-        return torch.tensor([position + quaternion]).float()
+        position = [0.42782, 0.055, 0.24781]
+        
+
+
+        pos=[0.19754 + 0.1, 0.07228 + 0.1, -0.33015 + 0.1]
+        rot=[0.97991, 0.03164, -0.0956, 0.17215]
+        return torch.tensor([pos + rot]).float()
         # return self.get_manipulation(env, object_class, manipulation_type, viz)
 
     def get_grasp(self, env, object_class, manipulation_type="grasps", viz=True):
         return self.get_manipulation(env, object_class, manipulation_type, viz)
+        # pos=[0.80298, 0.0721, 0.1737]
+        # rot=[-0.5,  0.5, -0.5,  0.5]
+        # return (torch.tensor([pos + rot]).float(), torch.tensor([True]))
         
     
     def get_manipulation(self, env, object_class, manipulation_type, viz=True):
@@ -92,10 +103,13 @@ class Grasper:
             (goal_pos, goal_quat), success = self.sample_manipulations(outputs, env.unwrapped.num_envs, manipulation_type)
         else:
             rgb, seg, depth, meta_data = env.get_camera_data()
+            # breakpoint()
+            # self.visualize_rgb_image(rgb[0], title="Camera RGB Image")
+            # self.visualize_segmentation_image(seg[0], meta_data[0]["label_map"], title="Camera Segmentation Image") 
+            # self.visualize_depth_image(depth[0], title="Camera Depth Image")
             data = rgb, seg, depth, meta_data
             data, outputs = self.load_and_predict_real(data, self._model, self._cfg, manipulation_type, obj_label=object_class)
             (goal_pos, goal_quat), success, temp = self.choose_manipulation(outputs, manipulation_type, object_class = object_class)
-
 
         if viz:
             self.visualize(data[0], {k: v[0] for k, v in outputs.items()})
@@ -141,7 +155,6 @@ class Grasper:
             2 * (y * z - w * x),
             1 - 2 * (x**2 + y**2)
         ], dim=-1)
-
         pregrasp = pose.clone()
         pregrasp[:, :3] -= offset * direction
 
@@ -231,6 +244,7 @@ class Grasper:
             'seg': seg,
             'cam_pose': torch.eye(4),
         }
+        # Why is object_inputs set before 
         d.update({
             'object_inputs': torch.rand(1024, 6),
             'ee_pose': torch.eye(4),
@@ -312,9 +326,11 @@ class Grasper:
         '''
         rgb, seg, depth, meta_data = loaded_data
         rgb = normalize_rgb(rgb).permute(1, 2, 0)
+        depth = np.squeeze(depth, axis=-1) 
         xyz = torch.from_numpy(
             depth_to_xyz(depth, meta_data['intrinsics'])
         ).float()
+        depth_mask = (depth > 0)
         seg = torch.from_numpy(np.array(seg))
 
         label_map = meta_data['label_map']
@@ -327,7 +343,7 @@ class Grasper:
                 robot_mask |= seg == label_map[meta_data['object_label']]
             depth[robot_mask] = 0
             seg[robot_mask] = 0
-        xyz, rgb, seg = xyz[depth > 0], rgb[depth > 0], seg[depth > 0]
+        xyz, rgb, seg = xyz[depth_mask], rgb[depth_mask], seg[depth_mask]
         cam_pose = torch.from_numpy(meta_data['camera_pose']).float()
         xyz_world = xyz @ cam_pose[:3, :3].T + cam_pose[:3, 3]
 
@@ -359,15 +375,41 @@ class Grasper:
             'seg': seg,
             'cam_pose': cam_pose
         }
-
+        # breakpoint()
         if 'object_label' in meta_data:
-            obj_mask = seg == label_map[meta_data['object_label']] if meta_data['object_label'] in label_map else seg
+            obj_mask = (seg == label_map[meta_data['object_label']]).squeeze() if meta_data['object_label'] in label_map else seg.squeeze()
+            # def visualize_segmentation(obj_xyz, obj_rgb):
+            #     import matplotlib.pyplot as plt
+            #     from mpl_toolkits.mplot3d import Axes3D
+            #     fig = plt.figure()
+            #     ax = fig.add_subplot(111, projection='3d')
+
+            #     mean = torch.tensor([0.485, 0.456, 0.406]).to(obj_rgb.device)
+            #     std = torch.tensor([0.229, 0.224, 0.225]).to(obj_rgb.device)
+            #     obj_rgb_denormalized = obj_rgb * std + mean
+
+            #     obj_rgb_denormalized = torch.clamp(obj_rgb_denormalized, 0, 1)
+            #     obj_rgb_np = obj_rgb_denormalized.cpu().numpy()
+
+            #     scatter = ax.scatter(obj_xyz[:, 0].cpu().numpy(),
+            #                         obj_xyz[:, 1].cpu().numpy(),
+            #                         obj_xyz[:, 2].cpu().numpy(),
+            #                         c=obj_rgb_np, 
+            #                         s=1)
+                
+            #     ax.set_xlabel('X Label')
+            #     ax.set_ylabel('Y Label')
+            #     ax.set_zlabel('Z Label')
+            #     plt.show()
+
             obj_xyz, obj_rgb = xyz_world[obj_mask], rgb[obj_mask]
+            # visualize_segmentation(obj_xyz, obj_rgb)
             obj_xyz_grid = torch.unique(
                 (obj_xyz[:, :2] / grid_res).round(), dim=0
             ) * grid_res
             bottom_center = obj_xyz.min(dim=0)[0]
             bottom_center[:2] = obj_xyz_grid.mean(dim=0)
+            
 
             ee_pose = torch.from_numpy(meta_data['ee_pose']).float()
             inv_ee_pose = ee_pose.inverse()
@@ -388,6 +430,7 @@ class Grasper:
                 'object_center': torch.zeros(3)
             })
         return outputs, meta_data
+    
 
     def load_and_predict_real(self, loaded_data, model, cfg, manipulation_type, obj_label=None):
         '''
@@ -684,3 +727,86 @@ class Grasper:
                         vis, f"orientation_{i:02d}/placements/{j:02d}/object",
                         obj_xyz_placed, obj_rgb, size=0.01
                     )
+
+
+    def visualize_rgb_image(self, rgb_tensor, title="RGB Image"):
+        """
+        Visualizes an RGB image using PIL and Matplotlib.
+
+        Parameters
+        ----------
+        rgb_tensor : torch.Tensor
+            The RGB image tensor with shape (H, W, 3) and values in [0, 1].
+        title : str, optional
+            The title for the Matplotlib figure.
+        """
+        # Convert tensor to numpy array
+        rgb_np = rgb_tensor
+
+        # Ensure the values are in the range [0, 255] for PIL
+        rgb_np = (rgb_np * 255).astype(np.uint8)
+
+        # Create a PIL Image
+        img = Image.fromarray(rgb_np)
+
+        # Display using PIL (optional)
+        img.show(title=title)
+
+        # Alternatively, display using Matplotlib
+        plt.figure(figsize=(8, 6))
+        plt.imshow(img)
+        plt.title(title)
+        plt.axis('off')
+        plt.show()
+
+    def visualize_depth_image(self, depth_tensor, title="Depth Image"):
+        """
+        Visualizes a Depth image using Matplotlib.
+
+        Parameters
+        ----------
+        depth_tensor : torch.Tensor
+            The Depth image tensor with shape (H, W) and values representing depth.
+        title : str, optional
+            The title for the Matplotlib figure.
+        """
+        # Convert tensor to numpy array
+        depth_np = depth_tensor
+
+        # Display using Matplotlib
+        plt.figure(figsize=(8, 6))
+        plt.imshow(depth_np, cmap='gray')
+        plt.title(title)
+        plt.colorbar(label='Depth')
+        plt.axis('off')
+        plt.show()
+
+
+    def visualize_segmentation_image(self, seg_tensor, label_map, title="Segmentation"):
+        """
+        Visualizes a Segmentation image using Matplotlib with color mapping.
+
+        Parameters
+        ----------
+        seg_tensor : torch.Tensor
+            The Segmentation image tensor with shape (H, W) and integer labels.
+        label_map : dict
+            A dictionary mapping label indices to RGB colors.
+        title : str, optional
+            The title for the Matplotlib figure.
+        """
+        # Convert tensor to numpy array
+        seg_np = seg_tensor.squeeze(-1)
+
+        # Create a color image based on label_map
+        seg_color = np.zeros((seg_np.shape[0], seg_np.shape[1], 3), dtype=np.uint8)
+        for label, color in label_map.items():
+            mask = seg_np == label
+            seg_color[mask] = color  # Assign color to all RGB channels for the mask
+
+        # Display using Matplotlib
+        plt.figure(figsize=(8, 6))
+        plt.imshow(seg_color)
+        plt.title(title)
+        plt.axis('off')
+        plt.show()

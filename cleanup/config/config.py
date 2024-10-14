@@ -4,7 +4,7 @@ from .grasp import GraspConfig
 
 @dataclass
 class Config:
-    usd_path: str = "./data/g60.usd"
+    usd_path: str = "./data/kitchen01.usda"
     log_dir: str = "./logs"
     grasp: GraspConfig = GraspConfig()
 
@@ -37,6 +37,6 @@ class Config:
 
     @dataclass
     class ActionConfig:
-        type: str = 'relative'
+        type: str = 'absolute'
     actions: ActionConfig = ActionConfig()
 
