@@ -282,7 +282,22 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
 
-    reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    # reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+
+    #spawn kitchen slightly differently
+    reset_all = EventTerm(
+        func=mdp.reset_root_state_uniform, 
+        mode="reset",
+        params={
+            "pose_range": {"x": (-0.0, 0.0), "y": (-0.0, 0.0), "yaw": (0.0, 0.0)},
+            "velocity_range": {
+                "x": (-0.05, 0.05),
+                "y": (-0.05, 0.05),
+                "z": (-0.05, 0.05),
+            },
+            "asset_cfg": SceneEntityCfg("kitchen01"),
+        }
+    )
     # reset_camera = EventTerm(
     #         func=mdp.reset_cam,
     #         mode="reset",
