@@ -11,7 +11,7 @@ from curobo.util.usd_helper import UsdHelper
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg
 import omni.isaac.lab.sim as sim_utils
 from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
-import omni.isaac.lab.utils.math as math
+from omni.isaac.lab.utils import math as math_utils
 import json_numpy
 import requests
 json_numpy.patch()
@@ -255,12 +255,21 @@ class OpenDrawerAction(Action, action_name="open_drawer"):
 
         planner.update()
 
-        # Hard code the values of the handle
-        pos = [0.4030,  0.4921,  0.1737]
-        quat = [0.5,  -0.5, 0.5, -0.5]
-        grasp_pose = torch.tensor([pos + quat]).float()
-        grasp_pose = grasp_pose.to(env.unwrapped.device)
+        # Dynamically query the values of the handle
+        handle_id, handle_name = env.scene["kitchen01"].find_bodies("drawer_16_handle")
 
+        # Get the handle's position and orientation in the world frame
+        handle_location = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, :3]
+        handle_orientation = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, 3:7]
+
+        # Convert orientation to Euler angles for rotation adjustment
+        x_rotation, y_rotation, z_rotation = math_utils.euler_xyz_from_quat(handle_orientation)
+        delta_quat = math_utils.quat_from_euler_xyz(x_rotation * 0, y_rotation * 0, z_rotation - torch.as_tensor([torch.pi]).to(env.device))
+        # Combine position and quaternion for the initial grasp pose
+        grasp_pose = torch.cat((handle_location, delta_quat[0].unsqueeze(0)), dim=1).float()
+
+        grasp_pose = grasp_pose.to(env.unwrapped.device)
+        print(grasp_pose)
         # Get pregrasp pose
         pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
         traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
@@ -288,6 +297,8 @@ class OpenDrawerAction(Action, action_name="open_drawer"):
         
         planner.attach_obj('/World/envs/env_0/kitchen01/drawer_16_handle/handle')
         planner.update()
+
+        print("finished grasp")
 
         go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):

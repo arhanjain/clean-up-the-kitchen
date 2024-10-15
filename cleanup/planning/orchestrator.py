@@ -54,7 +54,7 @@ class Orchestrator:
             ("open_drawer", {}),
             # ("grasp", {"target": "spoon"}),
             # ("open_drawer", {}),           
-            ("grasp", {"target": 'mustard_bottle'}),
+            # ("grasp", {"target": 'mustard_bottle'}),
             # ("place", {"target": "cup"}),
             # ("grasp", {"target": "ketchup"}),
             # ("place", {"target": "ketchup"}),
