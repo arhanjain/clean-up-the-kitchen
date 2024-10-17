@@ -36,6 +36,7 @@ from cleanup.planning.orchestrator import Orchestrator
 import yaml
 from cleanup.config import Config
 import cleanup.real2simenv as real2simenv
+from gymnasium.wrappers import TimeLimit
 
 @hydra.main(version_base=None, config_path="./cleanup/config", config_name="config")
 def main(cfg: Config):
@@ -57,7 +58,7 @@ def main(cfg: Config):
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
 
-
+    env = TimeLimit(env, max_episode_steps=cfg.data_collection.max_steps_per_episode)
     # apply wrappers
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
@@ -65,20 +66,34 @@ def main(cfg: Config):
 
     env.reset()
 
+    ee_pos = env.unwrapped.scene["ee_frame"].data.target_pos_source[:, 0]
+    print("current ee pos", ee_pos)
 
+    print("Initializing orchestrator")
     orchestrator = Orchestrator(env, cfg)
+    print("Initialized orchestrator")
+
     # Simulate environment
+    i = 0
     while simulation_app.is_running():
+        if env.is_stopped():
+            print("Data collection has reached max episodes. Exiting simulation loop.")
+            env.close()
+            break  # Exit the loop
+
+        obs, info = env.reset()
         done, trunc = False, False
-        for segment in orchestrator.run():
-            print(segment) 
-            obs, rew, done, trunc, info = env.step(segment)
-            if done or trunc:
-                print("Done or truncated!")
-                break
-        if not done and not trunc:
-            env.reset()
-    env.close()
+        while not done and not trunc:
+            print("current ee_pose", env.unwrapped.scene["ee_frame"].data.target_pos_source[:, 0])
+            for segment in orchestrator.run():
+                obs, rew, done, trunc, info = env.step(segment)
+                if done or trunc:
+                    print("Done or truncated!")
+                    break
+
+        print("Episode:", i)
+        i += 1
+
 
 
 

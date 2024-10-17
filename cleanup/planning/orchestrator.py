@@ -51,9 +51,9 @@ class Orchestrator:
         #     print("No valid plan generated.")
         #     return
         plan_template = [
-            ("open_drawer", {}),
+            # ("open_drawer", {}),
             # ("grasp", {"target": "spoon"}),
-            # ("open_drawer", {}),           
+            ("open_drawer", {}),           
             # ("grasp", {"target": 'mustard_bottle'}),
             # ("place", {"target": "cup"}),
             # ("grasp", {"target": "ketchup"}),

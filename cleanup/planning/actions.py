@@ -241,8 +241,8 @@ class RolloutAction(Action, action_name="rollout"):
 
 @dataclass(frozen=True)
 class OpenDrawerAction(Action, action_name="open_drawer"):
-    GRASP_STEPS: int = 7
-    delta_x: float = 0.1  # Adjust as needed for how far you want to open the drawer
+    GRASP_STEPS: int = 20  # Increased for slower movement
+    delta_x: float = 0.02  # Smaller delta for slower drawer opening
 
     def build(self, env):
         # Ensure required services are registered
@@ -253,29 +253,25 @@ class OpenDrawerAction(Action, action_name="open_drawer"):
         if planner is None:
             raise ValueError("Motion planner service not found")
 
-        planner.update()
+        # for _ in range(self.GRASP_STEPS - 15):
+        #     yield torch.rand(env.action_space.shape, device=env.unwrapped.device)
 
-        # Dynamically query the values of the handle
-        handle_id, handle_name = env.scene["kitchen01"].find_bodies("drawer_16_handle")
+        # planner.update()
+        init_pos = torch.as_tensor([0.5, 0.0, 0.70, 0.5, -0.5, 0.5, -0.5]).to(env.unwrapped.device)
+        handle_id, handle_name = env.scene["kitchen02"].find_bodies("drawer_00_handle")
+        handle_location = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, :3]
+        offset = torch.tensor([-0.08, 0.00, 0.00]).to(env.unwrapped.device)
+        init_pos[:3] = handle_location + offset
 
-        # Get the handle's position and orientation in the world frame
-        handle_location = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, :3]
-        handle_orientation = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, 3:7]
-
-        # Convert orientation to Euler angles for rotation adjustment
-        x_rotation, y_rotation, z_rotation = math_utils.euler_xyz_from_quat(handle_orientation)
-        delta_quat = math_utils.quat_from_euler_xyz(x_rotation * 0, y_rotation * 0, z_rotation - torch.as_tensor([torch.pi]).to(env.device))
-        # Combine position and quaternion for the initial grasp pose
-        grasp_pose = torch.cat((handle_location, delta_quat[0].unsqueeze(0)), dim=1).float()
-
-        grasp_pose = grasp_pose.to(env.unwrapped.device)
+        grasp_pose = init_pos.unsqueeze(0)
         print(grasp_pose)
+
         # Get pregrasp pose
         pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
         traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
         if traj is None:
             raise ValueError("Failed to plan to pregrasp pose")
-
+        
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
         traj = torch.cat((traj, gripper_action), dim=2)
@@ -283,59 +279,35 @@ class OpenDrawerAction(Action, action_name="open_drawer"):
             yield traj[:, pose_idx]
         print("going to grasp")
 
-        # # Go to grasp pose
-        # opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
-        # go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1)
-        # for _ in range(self.GRASP_STEPS):
-        #     yield go_to_grasp
+        # Go to grasp pose
+        opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1)
+        for _ in range(self.GRASP_STEPS):
+            yield go_to_grasp
 
-        # Close gripper
+        # Close gripper (make the gripper closing slower)
         closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
-        close_gripper = torch.cat((pregrasp_pose, closed_gripper), dim=1)
-        for _ in range(self.GRASP_STEPS):
+        close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1)
+        for _ in range(self.GRASP_STEPS - 10):
             yield close_gripper
-        
-        planner.attach_obj('/World/envs/env_0/kitchen01/drawer_16_handle/handle')
-        planner.update()
-
-        print("finished grasp")
-
-        go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
-        for _ in range(self.GRASP_STEPS):
-            go_to_pregrasp[:, 0] -= 0.04
-            go_to_pregrasp[:, 1] += 0.01
-            yield go_to_pregrasp
-        
-
-
-        # pullout_pose = pregrasp_pose.clone()
-        # pullout_pose[0][0] -= 0.3
-        # # Move to pullout_pose to open the drawer
-        # closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
-        # traj = torch.cat((traj, closed_gripper), dim=2)  # Shape: [1, traj_len, 8]
-        # for pose_idx in range(traj.shape[1]):
-        #     yield traj[:, pose_idx]
-
-        # # Define letgo_pose (e.g., move up slightly)
-        # letgo_pose = .pullout_poseclone()  # Shape: [7]
-        # letgo_pose[2] += 0.05  # Move up by 5 cm
-
-        # # Plan to letgo_pose
-        # traj = planner.plan(letgo_pose, mode="ee_pose_abs")
-        # if traj is None:
-        #     raise ValueError("Failed to plan to letgo pose")
-
-        # # Move to letgo_pose
-        # traj = torch.cat((traj, gripper_action), dim=2)  # Continue holding the gripper closed
-        # for pose_idx in range(traj.shape[1]):
-        #     yield traj[:, pose_idx]
-
-        # Open gripper to release the handle
-        go_to_pregrasp[:, -1] = 1
-        for _ in range(self.GRASP_STEPS):
-            yield go_to_pregrasp
 
         # planner.update()
-        # # If you attached the drawer earlier, detach it now
+        # planner.attach_obj('/World/envs/env_0/kitchen02/drawer_00_handle/handle')
+        print("finished grasp")
+
+        # From the current grasp pose, pull the drawer out slowly 
+        go_backwards = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        for _ in range(self.GRASP_STEPS + 30):
+            go_backwards[:, 0] -= 0.005
+            yield go_backwards
+        
+        # Slowly release the gripper
+        # go_to_pregrasp[:, -1] = 1
+        # for _ in range(self.GRASP_STEPS):
+        #     yield go_to_pregrasp
+
+        # planner.update()
+
         # planner.detach_obj()
+
         

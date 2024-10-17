@@ -1,8 +1,12 @@
 import torch 
-from omni.isaac.lab.envs import ManagerBasedEnv
+from omni.isaac.lab.envs import ManagerBasedRLEnv, ManagerBasedEnv
 from omni.isaac.lab.managers import SceneEntityCfg
 import omni.isaac.lab.utils.math as math_utils
-
+import numpy as np
+from omni.isaac.lab.controllers import DifferentialIKController, DifferentialIKControllerCfg
+from omni.isaac.lab.assets import Articulation
+from omni.isaac.lab.utils.math import subtract_frame_transforms
+from omni.isaac.lab.sensors import FrameTransformer
 
 def reset_cam(
     env: ManagerBasedEnv,
@@ -53,3 +57,76 @@ def reset_cam(
 
     # set into the physics simulation
     asset.set_world_poses(positions, orientations, env_ids, convention="opengl")
+
+def randomize_ee_start_position(
+    env: ManagerBasedRLEnv,
+    env_ids: torch.Tensor,
+    ee_frame_cfg: SceneEntityCfg = SceneEntityCfg("ee_frame"),
+    robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    for _ in range(15):
+        env.sim.step()
+    robot: Articulation = env.unwrapped.scene[robot_cfg.name]
+    num_envs = env.unwrapped.scene.num_envs
+    device = env.unwrapped.device
+    ee_idx = robot.data.body_names.index("panda_hand")
+    # Set current ee pose to what it should start as under the ideal
+    # joint position so that IK works correctly
+
+    ee_frame: FrameTransformer = env.scene[ee_frame_cfg.name]
+
+    ee_pos_w = ee_frame.data.target_pos_w[..., 0, :]  
+    ee_quat_w = ee_frame.data.target_quat_w[..., 0, :]
+    robot_pos_w = robot.data.root_pos_w
+    robot_quat_w = robot.data.root_quat_w
+
+    ee_pos_b, ee_quat_b = subtract_frame_transforms(
+        robot_pos_w, robot_quat_w,
+        ee_pos_w, ee_quat_w
+    )
+    print("Current ee_pos", ee_pos_b)
+
+    random_ee_positions = np.zeros((num_envs, 3))
+    random_x = torch.FloatTensor(num_envs,).uniform_(0.25, 0.45)
+    random_y = torch.FloatTensor(num_envs,).uniform_(-0.25, 0.35)
+    random_z = torch.FloatTensor(num_envs,).uniform_(0.15, 0.3)
+
+    # random_x = np.random.uniform(low=0.25, high=0.45, size=(num_envs,))
+    # random_y = np.random.uniform(low=-0.25, high=0.35, size=(num_envs,))
+    # random_z = np.random.uniform(low=-0.15, high=0.3, size=(num_envs,))
+
+    print("random_x", random_x)
+    print("random_y", random_y)
+    print("random_z", random_z)
+
+
+    random_ee_positions[:, 0]= random_x
+    random_ee_positions[:, 1]= random_y
+    random_ee_positions[:, 2]= random_z
+    random_ee_positions = torch.tensor(random_ee_positions, device=device)
+
+    ik_cfg = DifferentialIKControllerCfg(
+        command_type="position", use_relative_mode=False, ik_method="pinv")
+    ik_controller = DifferentialIKController(
+        cfg=ik_cfg, num_envs=num_envs, device=device
+    )
+    ik_controller.set_command(command=random_ee_positions, ee_quat=ee_quat_b)
+
+    jacobi_body_idx = ee_idx - 1
+    joint_ids = list(range(robot.num_joints))
+    print("num joints", robot.num_joints)
+    print("joints", robot.data.joint_names)
+    jacobian = robot.root_physx_view.get_jacobians()[:, jacobi_body_idx, :, joint_ids]
+
+    target_joint_positions = ik_controller.compute(ee_pos=ee_pos_b, ee_quat=ee_quat_b,
+        jacobian=jacobian, joint_pos=robot.data.joint_pos)
+    robot.set_joint_position_target(
+        target=target_joint_positions, joint_ids=joint_ids)
+    
+    print("Moving robot to position", random_ee_positions)
+    robot.write_data_to_sim()
+    # Give the robot time to move to the start pos
+    for _ in range(15):
+        env.sim.step()
+        env.scene.update(env.sim.get_physics_dt())
+

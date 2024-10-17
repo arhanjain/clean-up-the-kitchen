@@ -94,10 +94,10 @@ def ee_pose(
     return torch.cat((ee_pos_b, ee_quat_b), dim=1)
 
 def get_handle_pose(env) -> torch.Tensor:
-    handle_id, handle_name = env.scene["kitchen01"].find_bodies("drawer_16_handle")
+    handle_id, handle_name = env.scene["kitchen02"].find_bodies("drawer_00_handle")
     
-    handle_location = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, :3] 
-    handle_orientation = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, 3:7]
+    handle_location = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, :3] 
+    handle_orientation = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, 3:7]
     
     return torch.cat((handle_location, handle_orientation), dim=-1)
 

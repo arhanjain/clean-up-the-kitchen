@@ -22,6 +22,7 @@ import omni.isaac.lab.utils.math as math
 from PIL import Image
 import matplotlib.pyplot as plt
 import matplotlib
+from omni.isaac.lab.utils import math as math_utils
 
 class Grasper:
     '''
@@ -401,7 +402,6 @@ class Grasper:
             #     ax.set_ylabel('Y Label')
             #     ax.set_zlabel('Z Label')
             #     plt.show()
-
             obj_xyz, obj_rgb = xyz_world[obj_mask], rgb[obj_mask]
             # visualize_segmentation(obj_xyz, obj_rgb)
             obj_xyz_grid = torch.unique(
@@ -727,6 +727,24 @@ class Grasper:
                         vis, f"orientation_{i:02d}/placements/{j:02d}/object",
                         obj_xyz_placed, obj_rgb, size=0.01
                     )
+
+    def obtain_target_quat_from_multi_angles(self, axis, angles):
+        quat_list = []
+        for index, cam_axis in enumerate(axis):
+            euler_xyz = torch.zeros(3)
+            euler_xyz[cam_axis] = angles[index]
+            quat_list.append(
+                math_utils.quat_from_euler_xyz(euler_xyz[0], euler_xyz[1],
+                                            euler_xyz[2]))
+        if len(quat_list) == 1:
+            return quat_list[0]
+        else:
+            target_quat = quat_list[0]
+            for index in range(len(quat_list) - 1):
+
+                target_quat = math_utils.quat_mul(quat_list[index + 1],
+                                                target_quat)
+            return target_quat
 
 
     def visualize_rgb_image(self, rgb_tensor, title="RGB Image"):

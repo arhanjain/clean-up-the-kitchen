@@ -12,32 +12,29 @@ class DataCollector(gym.Wrapper):
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
-        # temporary way to extract camera intrinsics
-        # intrinsics = self.env.scene["camera"].data.intrinsic_matrices[0].cpu().numpy()
-    
+        # Save metadata
         metadata = {
-                "action_space": env.action_space,
-                "obs_space": env.observation_space,
-                }
-        with open(self.save_dir/"info.pkl", "wb") as f:
+            "action_space": env.action_space,
+            "obs_space": env.observation_space,
+        }
+        with open(self.save_dir / "info.pkl", "wb") as f:
             pickle.dump(metadata, f)
 
         self.ep = 0
-        self.max_ep = cfg.max_episodes
+        self.max_ep = cfg.max_episodes  # Ensure this is set in your cfg
         self.data_collector = RobomimicDataCollector(
             env_name=env_name,
             directory_path=self.save_dir,
             filename=ds_name, 
-            num_demos=cfg.max_episodes,
+            num_demos=self.max_ep,
             flush_freq=1, 
-            env_config=None,
+            env_config=env_cfg,
         )
 
     def reset(self, **kwargs):
         self.data_collector.reset() 
         obs, info = self.env.reset(**kwargs)
         return obs, info
-
 
     def step(self, action):
         obs, rew, done, trunc, info = self.env.step(action)
@@ -56,6 +53,7 @@ class DataCollector(gym.Wrapper):
         self.data_collector.add("obs/joint_state", obs["joint_state"])
         self.data_collector.add("obs/handle_pose", obs["handle_pose"])
         self.data_collector.add("actions", action)
+        # Optionally add rewards and dones if needed
         # self.data_collector.add("rewards", np.array([reward]))
         # self.data_collector.add("dones", np.array([done]))
 
@@ -63,9 +61,5 @@ class DataCollector(gym.Wrapper):
         self.data_collector.close()
         super().close()
 
-
-
-
-
-
-
+    def is_stopped(self):
+        return self.data_collector.is_stopped()

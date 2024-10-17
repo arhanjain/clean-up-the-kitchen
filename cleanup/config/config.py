@@ -4,7 +4,7 @@ from .grasp import GraspConfig
 
 @dataclass
 class Config:
-    usd_path: str = "./data/kitchen01.usda"
+    usd_path: str = "./data/kitchen02/kitchen02.usda"
     log_dir: str = "./logs"
     grasp: GraspConfig = GraspConfig()
 
@@ -32,7 +32,8 @@ class Config:
 
     @dataclass
     class DataCollectionConfig:
-        max_episodes: int = 200
+        max_episodes: int = 150
+        max_steps_per_episode: int = 100
     data_collection: DataCollectionConfig = DataCollectionConfig()
 
     @dataclass

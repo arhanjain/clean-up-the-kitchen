@@ -28,6 +28,9 @@ from . import mdp
 from omni.isaac.lab.sim.schemas import ArticulationRootPropertiesCfg
 from omni.isaac.lab_assets import FRANKA_PANDA_HIGH_PD_CFG
 from omni.isaac.lab.markers.config import FRAME_MARKER_CFG  # isort: skip
+from omni.isaac.lab_tasks.manager_based.manipulation.cabinet.cabinet_env_cfg import (  # isort: skip
+    FRAME_MARKER_SMALL_CFG,
+)
 
 from pxr import Usd, Sdf
 from .utils import usd_utils, misc_utils
@@ -71,7 +74,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
         # offset=CameraCfg.OffsetCfg(pos=(-0.23, 0.93, 0.66486), rot=(-0.2765, -0.20009, 0.5544, 0.75905), convention="opengl"), # old env
-        offset=CameraCfg.OffsetCfg(pos=(0.93854, -0.03254, 0.90233), rot=(0.88574, 0.39354, 0.0986, 0.22553), convention="opengl"), # kitchen
+        offset=CameraCfg.OffsetCfg(pos=(-0.2411, -1.08517, 0.81276), rot=(0.81133, 0.50206, -0.15885, -0.25388), convention="opengl"), # kitchen
         # offset=CameraCfg.OffsetCfg(pos=(-0.59371, -1.10056, 0.76485), rot=(0.75146, 0.53087, -0.22605, -0.31999), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
@@ -84,7 +87,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     
     def load_kitchen_config(self):
         # Load the YAML file
-        with open('/home/raymond/projects/clean-up-the-kitchen/cleanup/config/kitchen01.yaml', 'r') as f:
+        with open('/home/raymond/projects/clean-up-the-kitchen/cleanup/config/kitchen02.yaml', 'r') as f:
             kitchen_cfg = yaml.safe_load(f)
         current_path = os.getcwd()
         articulation_objects = kitchen_cfg['params'].get('ArticulationObject', {})
@@ -126,7 +129,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
                         velocity_limit=100.0,
                         stiffness=0.0,
                         damping=0.0,
-                        friction=20.0,
+                        friction=10.0,
                     ),
                 },
             )
@@ -152,20 +155,43 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     
     def initialize_ee_frame(self):
         # Initialize the end-effector frame or any other components
-        marker_cfg = FRAME_MARKER_CFG.copy()
-        marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
-        marker_cfg.prim_path = "/Visuals/FrameTransformer"
+        # marker_cfg = FRAME_MARKER_CFG.copy()
+        # marker_cfg.markers["frame"].scale = (0.1, 0.1, 0.1)
+        # marker_cfg.prim_path = "/Visuals/FrameTransformer"
+        # self.ee_frame = FrameTransformerCfg(
+        #     prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
+        #     debug_vis=False,
+        #     visualizer_cfg=marker_cfg,
+        #     target_frames=[
+        #         FrameTransformerCfg.FrameCfg(
+        #             prim_path="{ENV_REGEX_NS}/Robot/panda_hand",
+        #             name="end_effector",
+        #             offset=OffsetCfg(
+        #                 pos=[0.0, 0.0, 0.0],
+        #             ),
+        #         ),
+        #     ],
+        # )
         self.ee_frame = FrameTransformerCfg(
             prim_path="{ENV_REGEX_NS}/Robot/panda_link0",
             debug_vis=False,
-            visualizer_cfg=marker_cfg,
+            visualizer_cfg=FRAME_MARKER_SMALL_CFG.replace(
+                prim_path="/Visuals/EndEffectorFrameTransformer"),
             target_frames=[
                 FrameTransformerCfg.FrameCfg(
                     prim_path="{ENV_REGEX_NS}/Robot/panda_hand",
-                    name="end_effector",
-                    offset=OffsetCfg(
-                        pos=[0.0, 0.0, 0.0],
-                    ),
+                    name="ee_tcp",
+                    offset=OffsetCfg(pos=(0.0, 0.0, 0.1034), ),
+                ),
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/panda_leftfinger",
+                    name="tool_leftfinger",
+                    offset=OffsetCfg(pos=(0.0, 0.0, 0.046), ),
+                ),
+                FrameTransformerCfg.FrameCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/panda_rightfinger",
+                    name="tool_rightfinger",
+                    offset=OffsetCfg(pos=(0.0, 0.0, 0.046), ),
                 ),
             ],
         )
@@ -282,27 +308,27 @@ class ObservationsCfg:
 class EventCfg:
     """Configuration for events."""
 
-    # reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-
-    #spawn kitchen slightly differently
-    reset_all = EventTerm(
-        func=mdp.reset_root_state_uniform, 
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.0, 0.0), "y": (-0.0, 0.0), "yaw": (0.0, 0.0)},
-            "velocity_range": {
-                "x": (-0.05, 0.05),
-                "y": (-0.05, 0.05),
-                "z": (-0.05, 0.05),
-            },
-            "asset_cfg": SceneEntityCfg("kitchen01"),
-        }
-    )
-    # reset_camera = EventTerm(
-    #         func=mdp.reset_cam,
+    reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+    randomize_ee_start_position = EventTerm(func=mdp.randomize_ee_start_position, mode="reset")
+    
+    # reset_base = EventTerm(
+    #         func=mdp.reset_root_state_uniform,
     #         mode="reset",
     #         params={
-    #             "pose_range": {"x": (-0.2, 0.2), "y": (-0.5, 0.5), "z": (-0.4, 0.4)},
+    #             "pose_range": {
+    #                 "x": (-0.0, 0.0),
+    #                 "y": (-0.0, 0.0),
+    #                 "yaw": (0.0, 0.0)
+    #             },
+    #             "velocity_range": {
+    #                 "x": (-0.05, 0.05),
+    #                 "y": (-0.05, 0.05),
+    #                 "z": (-0.05, 0.05),
+    #             },
+    #             "asset_cfg": SceneEntityCfg("kitchen02"),
+    #         },
+    #     )
+    #scurrent ee pos tensor([[0.3439, 0.0576, 0.5556]], device='cuda:0')            "pose_range": {"x": (-0.2, 0.2), "y": (-0.5, 0.5), "z": (-0.4, 0.4)},
     #             "velocity_range": {},
     #             "asset_cfg": SceneEntityCfg("camera"),
     #         },
