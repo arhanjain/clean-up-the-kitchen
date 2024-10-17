@@ -5,6 +5,8 @@ import gymnasium as gym
 from omni.isaac.lab_tasks.utils.data_collector import RobomimicDataCollector
 from pathlib import Path
 
+from cleanup.config.config import Config
+
 class DataCollector(gym.Wrapper):
     def __init__(self, env, cfg, env_cfg, save_dir, ds_name, env_name="Real2Sim"):
         super().__init__(env)
@@ -37,6 +39,7 @@ class DataCollector(gym.Wrapper):
         return obs, info
 
     def step(self, action):
+        print(action)
         obs, rew, done, trunc, info = self.env.step(action)
 
         self.collect_data(obs, action, rew, done)

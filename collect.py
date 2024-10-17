@@ -1,5 +1,6 @@
 import argparse
 import sys
+import sys
 from omni.isaac.lab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="test")
@@ -16,6 +17,8 @@ parser.add_argument("--ds_name", type=str, required=True, help="Name of the data
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args() 
 sys.argv = [sys.argv[0]] + hydra_args # clear out sys.argv for hydra
+args_cli, hydra_args = parser.parse_known_args() 
+sys.argv = [sys.argv[0]] + hydra_args # clear out sys.argv for hydra
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -27,11 +30,16 @@ import time
 import hydra 
 import gymnasium as gym 
 import cleanup.real2simenv 
+import time
+import hydra 
+import gymnasium as gym 
+import cleanup.real2simenv 
 from omni.isaac.lab_tasks.utils import parse_env_cfg
 
 from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
+from cleanup.planning.orchestrator import Orchestrator
 from cleanup.planning.orchestrator import Orchestrator
 import yaml
 from cleanup.config import Config
@@ -48,8 +56,13 @@ def main(cfg: Config):
         use_fabric=not args_cli.disable_fabric,
     )
     env_cfg.setup(cfg)
+    env_cfg.setup(cfg)
 
     # video wrapper stuff
+    env_cfg.viewer.resolution = cfg.video.viewer_resolution
+    env_cfg.viewer.eye = cfg.video.viewer_eye
+    env_cfg.viewer.lookat = cfg.video.viewer_lookat
+    video_kwargs = cfg.video
     env_cfg.viewer.resolution = cfg.video.viewer_resolution
     env_cfg.viewer.eye = cfg.video.viewer_eye
     env_cfg.viewer.lookat = cfg.video.viewer_lookat

@@ -19,6 +19,7 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         self.custom_cfg = custom_cfg
         super().__init__(*args, **kwargs)
 
+<<<<<<< HEAD
         # set default root state for all rigid bodies (read current position and right to default_root_state attribute)
         for rigid_object in self.scene.rigid_objects.values():
             root_state = rigid_object.data.root_state_w.clone()
@@ -49,6 +50,28 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         
         obs, rew, done, trunc, info = self.step(action)
         return obs, info
+=======
+
+    # TODO: this is a hacky solution which steps on reset to rerender camera,
+    # There must be a better way to do this
+    # def reset(self, *args, **kwargs):
+    #     obs, info = super().reset(*args, **kwargs)
+    #     #
+    #     # # get 0 action
+    #     # action = None
+    #     # if self.custom_cfg.actions.type == "absolute":
+    #     #     pos = self.scene["ee_frame"].data.target_pos_source[:, 0]
+    #     #     quat = self.scene["ee_frame"].data.target_quat_source[:, 0]
+    #     #     gripper = torch.zeros((self.num_envs, 1), dtype=torch.float32).to(self.device)
+    #     #     action = torch.cat((pos, quat, gripper), dim=1)
+    #     # elif self.custom_cfg.actions.type == "relative":
+    #     #     action = torch.tensor([[0,0,0,0,0,0,1]], dtype=torch.float32).to(self.device)
+    #     # else:
+    #     #     action = torch.tensor([[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]]).to(self.device)
+    #     # 
+    #     # obs, rew, done, trunc, info = self.step(action)
+    #     return obs, info
+>>>>>>> 72ade85e2733af7958099ed1453f3ca12ed3b872
 
 
     def get_joint_info(self):
@@ -160,6 +183,10 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         # save_dir = "./data"
         # everything should be numpy
         # Remove 4th channel for rgb
+<<<<<<< HEAD
+=======
+        # rgb = rgb[..., -1].cpu().numpy()
+>>>>>>> 72ade85e2733af7958099ed1453f3ca12ed3b872
         rgb = rgb.cpu().numpy()
         seg = seg
         depth = depth.cpu().numpy()

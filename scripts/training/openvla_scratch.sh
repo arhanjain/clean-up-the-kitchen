@@ -1,0 +1,15 @@
+torchrun --standalone --nnodes 1 --nproc-per-node 1 openvla/vla-scripts/finetune.py \
+  --vla_path "openvla/openvla-7b" \
+  --data_root_dir /mmfs1/home/arhanj/arhan/tensorflow_datasets/\
+  --dataset_name pick_carrot_easy_sim \
+  --run_root_dir ~/arhan/clean-up-the-kitchen/openvla/runs \
+  --adapter_tmp_dir ~/arhan/clean-up-the-kitchen/runs/ \
+  --lora_rank 32 \
+  --batch_size 8 \
+  --grad_accumulation_steps 1 \
+  --learning_rate 5e-4 \
+  --image_aug False \
+  --wandb_project clean-up-the-kitchen \
+  --wandb_entity arhanj \
+  --save_steps 250 \
+  --pretrained False

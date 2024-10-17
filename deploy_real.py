@@ -67,6 +67,7 @@ def test():
     #     trust_remote_code=True
     # ).to("cuda:0")
     # 
+
     video = []
     for i in range(100):
         t = time.time()
@@ -76,7 +77,7 @@ def test():
         images = obs["image"]
         combined_image = [v for k, v in images.items()]
         combined_image = np.concatenate(combined_image, axis=1)
-        instruction = "pick up the pot"
+        instruction = "put the carrot in the sink"
 
         cv2.imshow("realsense_view", cv2.cvtColor(combined_image, cv2.COLOR_BGR2RGB))
         cv2.waitKey(1)

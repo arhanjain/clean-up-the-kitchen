@@ -1,6 +1,12 @@
 [submodule "robomimic"]
 	path = robomimic
-	url = git@github.com:ARISE-Initiative/robomimic.git
+	url = git@github.com:arhanjain/robomimic.git
 [submodule "droid"]
 	path = droid
 	url = git@github.com:arhanjain/droid.git
+[submodule "openvla"]
+	path = openvla
+	url = git@github.com:openvla/openvla.git
+[submodule "rlds_dataset_builder"]
+	path = rlds_dataset_builder
+	url = git@github.com:arhanjain/rlds_dataset_builder.git
