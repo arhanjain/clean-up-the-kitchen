@@ -33,7 +33,7 @@ class Config:
     @dataclass
     class DataCollectionConfig:
         max_episodes: int = 150
-        max_steps_per_episode: int = 100
+        max_steps_per_episode: int = 300 
     data_collection: DataCollectionConfig = DataCollectionConfig()
 
     @dataclass

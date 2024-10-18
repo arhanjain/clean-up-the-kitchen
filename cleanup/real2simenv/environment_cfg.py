@@ -281,7 +281,7 @@ class ObservationsCfg:
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        # pcd = ObsTerm(func=mdp.get_point_cloud)
+        pcd = ObsTerm(func=mdp.get_point_cloud)
 
         def __post_init__(self):
             self.enable_corruption = True

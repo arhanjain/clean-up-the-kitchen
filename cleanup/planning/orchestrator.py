@@ -53,9 +53,9 @@ class Orchestrator:
         plan_template = [
             # ("open_drawer", {}),
             # ("grasp", {"target": "spoon"}),
-            ("open_drawer", {}),           
-            # ("grasp", {"target": 'mustard_bottle'}),
-            # ("place", {"target": "cup"}),
+            ("open_cabinet", {}),           
+            ("grasp", {"target": 'sugar_box'}),
+            ("place", {"target": "sugar_box"}),
             # ("grasp", {"target": "ketchup"}),
             # ("place", {"target": "ketchup"}),
         ]

@@ -52,14 +52,10 @@ class Grasper:
         self._env = env
 
     def get_placement(self, env, object_class, manipulation_type="placements", viz=True):
-        quaternion = [0.0896, -0.7723, -0.6288,  0.0105]
+        rot = [0.707, 0, 0.707, 0]
         # position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
-        position = [0.42782, 0.055, 0.24781]
-        
+        pos = [0.5, -0.4, 0]
 
-
-        pos=[0.19754 + 0.1, 0.07228 + 0.1, -0.33015 + 0.1]
-        rot=[0.97991, 0.03164, -0.0956, 0.17215]
         return torch.tensor([pos + rot]).float()
         # return self.get_manipulation(env, object_class, manipulation_type, viz)
 

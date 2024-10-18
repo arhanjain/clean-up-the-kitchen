@@ -310,4 +310,78 @@ class OpenDrawerAction(Action, action_name="open_drawer"):
 
         # planner.detach_obj()
 
+
+
+@dataclass(frozen=True)
+class OpenCabinetAction(Action, action_name="open_cabinet"):
+    GRASP_STEPS: int = 20  # Increased for slower movement
+    delta_x: float = 0.02  # Smaller delta for slower drawer opening
+
+    def build(self, env):
+        # Ensure required services are registered
+        grasper: Grasper = Action.get_service(ServiceName.GRASPER)
+        planner: MotionPlanner = Action.get_service(ServiceName.MOTION_PLANNER)
+        if grasper is None:
+            raise ValueError("Grasper service not found")
+        if planner is None:
+            raise ValueError("Motion planner service not found")
+
+        # for _ in range(self.GRASP_STEPS - 15):
+        #     yield torch.rand(env.action_space.shape, device=env.unwrapped.device)
+
+        # planner.update()
+        init_pos = torch.as_tensor([0.5, 0.0, 0.70, 0.707, 0, 0.707, 0]).to(env.unwrapped.device)
+        handle_id, handle_name = env.scene["kitchen02"].find_bodies("drawer_05_handle")
+        handle_location = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, :3]
+        offset = torch.tensor([-0.08, 0.00, 0.00]).to(env.unwrapped.device)
+        init_pos[:3] = handle_location + offset
+
+        grasp_pose = init_pos.unsqueeze(0)
+        print(grasp_pose)
+
+        # Get pregrasp pose
+        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+        traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
+        if traj is None:
+            raise ValueError("Failed to plan to pregrasp pose")
+        
+        # Go to pregrasp pose
+        gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
+        traj = torch.cat((traj, gripper_action), dim=2)
+        for pose_idx in range(traj.shape[1]):
+            yield traj[:, pose_idx]
+        print("going to grasp")
+
+        # Go to grasp pose
+        opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1)
+        for _ in range(self.GRASP_STEPS):
+            yield go_to_grasp
+
+        # Close gripper (make the gripper closing slower)
+        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1)
+        for _ in range(self.GRASP_STEPS - 10):
+            yield close_gripper
+
+        # planner.update()
+        # planner.attach_obj('/World/envs/env_0/kitchen02/drawer_00_handle/handle')
+        print("finished grasp")
+
+        # From the current grasp pose, pull the drawer out slowly 
+        go_backwards = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        for _ in range(self.GRASP_STEPS + 25):
+            go_backwards[:, 0] -= 0.01
+            go_backwards[:, 1] -= 0.005
+            yield go_backwards
+        
+        # Slowly release the gripper
+        go_backwards[:, -1] = 1
+        for _ in range(self.GRASP_STEPS - 15):
+            yield go_backwards
+
+        planner.update()
+
+        planner.detach_obj()
+
         

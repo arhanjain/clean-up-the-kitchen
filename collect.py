@@ -4,19 +4,13 @@ import sys
 from omni.isaac.lab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="test")
-parser.add_argument(
-    "--disable_fabric",
-    action="store_true",
-    default=False, help="Disable fabric and use USD I/O operations.",) 
-parser.add_argument(
-    "--num_envs", type=int, default=1, help="Number of environments to simulate."
-)
-parser.add_argument("--task", type=str, default=None, help="Name of the task.")
+
+parser.add_argument("--disable_fabric", action="store_true", help="Disable fabric.")
+parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
+parser.add_argument("--task", type=str, required=True, help="Name of the task.")
 parser.add_argument("--ds_name", type=str, required=True, help="Name of the dataset.")
 
 AppLauncher.add_app_launcher_args(parser)
-args_cli, hydra_args = parser.parse_known_args() 
-sys.argv = [sys.argv[0]] + hydra_args # clear out sys.argv for hydra
 args_cli, hydra_args = parser.parse_known_args() 
 sys.argv = [sys.argv[0]] + hydra_args # clear out sys.argv for hydra
 
@@ -76,7 +70,6 @@ def main(cfg: Config):
     if cfg.video.enabled:          
         env = gym.wrappers.RecordVideo(env, **video_kwargs)
     env = DataCollector(env, cfg.data_collection, env_cfg, save_dir=f"data/", ds_name=args_cli.ds_name, env_name=args_cli.task)
-
     env.reset()
 
     ee_pos = env.unwrapped.scene["ee_frame"].data.target_pos_source[:, 0]
