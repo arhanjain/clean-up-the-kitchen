@@ -216,15 +216,22 @@ class MotionPlanner:
 
     def update(
         self,
-        ignore_substring: List[str] = ["Franka", "material", "Plane", "Visuals", "g60_vention"],
-        robot_prim_path: str = "/World/env_0/robot/panda_link0", # caution when going multienv
+        ignore_substring=[
+            "/World/envs/env_0/Robot",
+            "/World/GroundPlane",
+            "/World/collisions",
+            "/World/light",
+            "/curobo",
+        ],
+        robot_prim_path: str = "/World/envs/env_0/Robot", # caution when going multienv
         ret = False,
     ) -> None | WorldConfig:
         print("updating world...")
         obstacles = self.usd_help.get_obstacles_from_stage(
             ignore_substring=ignore_substring, reference_prim_path=robot_prim_path
         ).get_collision_check_world()
-
+        for obstacle in obstacles.objects:
+            print("obstacle: ", obstacle.name)
         if ret:
             return obstacles
 
@@ -251,8 +258,8 @@ class MotionPlanner:
         self.motion_gen.attach_objects_to_robot(
             cu_js,
             obj_path,
-            sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
-            world_objects_pose_offset=Pose.from_list([0, 0, 0.01, 1, 0, 0, 0], self.tensor_args),
+            # sphere_fit_type=SphereFitType.VOXEL_VOLUME_SAMPLE_SURFACE,
+            # world_objects_pose_offset=Pose.from_list([0, 0, 0.01, 1, 0, 0, 0], self.tensor_args),
         )
 
     def detach_obj(self) -> None:

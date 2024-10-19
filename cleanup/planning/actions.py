@@ -111,7 +111,7 @@ class GraspAction(Action, action_name="grasp"):
             raise ValueError("Grasper service not found")
         if planner is None:
             raise ValueError("Motion planner service not found")
-
+        planner.motion_gen.clear_world_cache()
         planner.update()
 
         # Find successful plan
@@ -145,7 +145,7 @@ class GraspAction(Action, action_name="grasp"):
         close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
             yield close_gripper
-
+        planner.motion_gen.clear_world_cache()
         planner.update()
         planner.attach_obj(self.target)
         
@@ -201,6 +201,7 @@ class PlaceAction(Action, action_name="place"):
             yield open_gripper
 
         planner.detach_obj()
+        planner.motion_gen.clear_world_cache()
         planner.update()
         
         # Go to pregrasp pose
@@ -326,21 +327,13 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         if planner is None:
             raise ValueError("Motion planner service not found")
 
-        # for _ in range(self.GRASP_STEPS - 15):
-        #     yield torch.rand(env.action_space.shape, device=env.unwrapped.device)
-
-        # planner.update()
-        init_pos = torch.as_tensor([0.5, 0.0, 0.70, 0.707, 0, 0.707, 0]).to(env.unwrapped.device)
-        handle_id, handle_name = env.scene["kitchen02"].find_bodies("drawer_05_handle")
-        handle_location = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, :3]
-        offset = torch.tensor([-0.08, 0.00, 0.00]).to(env.unwrapped.device)
-        init_pos[:3] = handle_location + offset
-
-        grasp_pose = init_pos.unsqueeze(0)
-        print(grasp_pose)
+        planner.motion_gen.clear_world_cache()
+        planner.update()
+        
+        grasp_pose = grasper.get_open_grasp_pose(env)
 
         # Get pregrasp pose
-        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.05)
         traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
         if traj is None:
             raise ValueError("Failed to plan to pregrasp pose")
@@ -364,8 +357,9 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         for _ in range(self.GRASP_STEPS - 10):
             yield close_gripper
 
-        # planner.update()
-        # planner.attach_obj('/World/envs/env_0/kitchen02/drawer_00_handle/handle')
+        planner.motion_gen.clear_world_cache()
+        planner.update()
+        planner.attach_obj('/World/envs/env_0/kitchen02/drawer_05_handle/handle')
         print("finished grasp")
 
         # From the current grasp pose, pull the drawer out slowly 
@@ -379,7 +373,7 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         go_backwards[:, -1] = 1
         for _ in range(self.GRASP_STEPS - 15):
             yield go_backwards
-
+        planner.motion_gen.clear_world_cache()
         planner.update()
 
         planner.detach_obj()

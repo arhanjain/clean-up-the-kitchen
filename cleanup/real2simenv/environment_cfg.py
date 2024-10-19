@@ -271,7 +271,7 @@ class ObservationsCfg:
         )
         gripper_state = ObsTerm(
                 func=mdp.gripper_state,
-                        )
+        )
         joint_state = ObsTerm(
             func = mdp.get_joint_info,
         )
@@ -311,23 +311,24 @@ class EventCfg:
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
     randomize_ee_start_position = EventTerm(func=mdp.randomize_ee_start_position, mode="reset")
     
-    # reset_base = EventTerm(
-    #         func=mdp.reset_root_state_uniform,
-    #         mode="reset",
-    #         params={
-    #             "pose_range": {
-    #                 "x": (-0.0, 0.0),
-    #                 "y": (-0.0, 0.0),
-    #                 "yaw": (0.0, 0.0)
-    #             },
-    #             "velocity_range": {
-    #                 "x": (-0.05, 0.05),
-    #                 "y": (-0.05, 0.05),
-    #                 "z": (-0.05, 0.05),
-    #             },
-    #             "asset_cfg": SceneEntityCfg("kitchen02"),
-    #         },
-    #     )
+    reset_base = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {
+                "x": (-0.0, 0.0),
+                "y": (-0.0, 0.0),
+                "yaw": (-0.52, 0.52)
+            },
+            "velocity_range": {
+                "x": (-0.05, 0.05),
+                "y": (-0.05, 0.05),
+                "z": (-0.05, 0.05),
+            },
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+
     #scurrent ee pos tensor([[0.3439, 0.0576, 0.5556]], device='cuda:0')            "pose_range": {"x": (-0.2, 0.2), "y": (-0.5, 0.5), "z": (-0.4, 0.4)},
     #             "velocity_range": {},
     #             "asset_cfg": SceneEntityCfg("camera"),
