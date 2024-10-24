@@ -111,7 +111,8 @@
             "obs": {
                 "low_dim": [
                   "ee_pose",
-                  "gripper_state"
+                  "gripper_state",
+                  "cube"
                 ],
                 "rgb": [
                 ],
