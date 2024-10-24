@@ -18,8 +18,8 @@
             "on_best_rollout_return": false,
             "on_best_rollout_success_rate": true
         },
-        "epoch_every_n_steps": 100,
-        "validation_epoch_every_n_steps": 10,
+        "epoch_every_n_steps": null,
+        "validation_epoch_every_n_steps": null,
         "env": null,
         "additional_envs": null,
         "render": false,
@@ -55,7 +55,7 @@
         "goal_mode": null,
         "cuda": true,
         "batch_size": 256,
-        "num_epochs": 100,
+        "num_epochs": 300,
         "seed": 1
     },
     "algo": {
@@ -109,9 +109,11 @@
     "observation": {
         "modalities": {
             "obs": {
-                "low_dim": [],
+                "low_dim": [
+                  "ee_pose",
+                  "gripper_state"
+                ],
                 "rgb": [
-                  "rgb"
                 ],
                 "depth": [],
                 "scan": []
@@ -132,12 +134,12 @@
             },
             "rgb": {
                 "core_class": "VisualCore",
-                "core_kwargs": {
-                    "feature_dimension": 64,
+                "core_kwargs": { "feature_dimension": 64,
                     "backbone_class": "ResNet18Conv",
                     "backbone_kwargs": {
-                        "pretrained": false,
-                        "input_coord_conv": false
+                        "pretrained": true,
+                        "input_coord_conv": false,
+                        "freeze": true
                     },
                     "pool_class": "SpatialSoftmax",
                     "pool_kwargs": {

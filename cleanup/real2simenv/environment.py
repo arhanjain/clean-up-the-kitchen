@@ -18,12 +18,29 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
     def __init__(self, custom_cfg: Config, *args, **kwargs):
         self.custom_cfg = custom_cfg
         super().__init__(*args, **kwargs)
+        self.last_obs = None
 
 
     # TODO: this is a hacky solution which steps on reset to rerender camera,
     # There must be a better way to do this
-    # def reset(self, *args, **kwargs):
-    #     obs, info = super().reset(*args, **kwargs)
+    def reset(self, *args, **kwargs):
+        obs, info = super().reset(*args, **kwargs)
+
+        reset_env_ids = torch.arange(self.num_envs).to(self.device)
+        self._reset_idx(reset_env_ids)
+
+        self.scene.update(dt=self.physics_dt)
+        self.sim.step()
+        self.sim.step()
+        self.sim.step()
+
+        self.last_obs = obs
+        return obs, info
+
+    def step(self, action):
+        obs, rew, done, trunc, info = super().step(action)
+        self.last_obs = obs
+        return obs, rew, done, trunc, info
     #     #
     #     # # get 0 action
     #     # action = None
@@ -114,7 +131,7 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
             label_maps.append(mapping)
         
         # Depth values per pixel
-        depth = self.scene["camera"].data.output["distance_to_image_plane"]
+        depth = self.scene["camera"].data.output["distance_to_image_plane"].squeeze(-1)
 
         # camera intrinsics
         intrinsics = self.scene["camera"].data.intrinsic_matrices

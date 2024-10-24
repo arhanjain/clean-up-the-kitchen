@@ -21,6 +21,6 @@ python robomimic/robomimic/scripts/split_train_val.py --dataset $DATASET_PATH
 
 echo "Training a Diffusion model from scratch on $DATASET_PATH"
 python train.py \
-  --config ./scripts/training/configs/diffusion_config.json \
+  --config ./scripts/training/configs/diffusion_proprio_config.json \
   --name $TRAINING_RUN_NAME \
   --dataset $DATASET_PATH \

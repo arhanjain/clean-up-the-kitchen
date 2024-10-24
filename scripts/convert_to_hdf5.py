@@ -53,9 +53,12 @@ for ep_path in tqdm(list(data_dir.glob("episode_*.npz"))):
     
 
     observations = ep["observations"]
+    for obs in observations:
+        # normalize images to [0, 1]
+        obs["policy"]["rgb"] = obs["policy"]["rgb"].astype(np.float32) / 255.0
     next_observations = ep["next_observations"]
 
-    # absolute actions
+    # absolute actionsconvert
     abs_actions = ep["actions"]
     # relative actions
     # ee_pose = np.array([obs["policy"]["ee_pose"].squeeze() for obs in observations])
@@ -117,8 +120,9 @@ for ep_path in tqdm(list(data_dir.glob("episode_*.npz"))):
 # add normalize data between -1, 1
 for ep in tqdm(data):
     demo = data[ep]
-    # demo.create_dataset("actions", data = 2 * ((demo["actions_raw"] - action_min) / (action_max - action_min)) - 1)
-    demo.create_dataset("actions", data=demo["actions_raw"])
+    demo.create_dataset("actions", data = 2 * ((demo["actions_raw"] - action_min) / (action_max - action_min)) - 1)
+    # breakpoint()
+    # demo.create_dataset("actions", data=demo["actions_raw"])
 
 # THIS SUPPORTED BY ROBOMIMICICC
 # train_pct = 0.8

@@ -33,12 +33,12 @@ class Config:
     @dataclass
     class DataCollectionConfig:
         ds_name: str = "test"
-        max_episodes: int = 200
+        max_episodes: int = 10
         save: bool = True
     data_collection: DataCollectionConfig = DataCollectionConfig()
 
     @dataclass
     class ActionConfig:
-        type: str = 'relative'
+        type: str = 'relative' # relative, absolute
     actions: ActionConfig = ActionConfig()
 

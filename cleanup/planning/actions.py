@@ -1,3 +1,4 @@
+from curobo.wrap.reacher.motion_gen import MotionGenStatus
 import torch
 import numpy as np
 
@@ -7,6 +8,7 @@ from typing import Generator
 from dataclasses import dataclass
 from cleanup.planning.grasp import Grasper
 from cleanup.planning.motion_planner import MotionPlanner
+import cleanup.planning.utils as planning_utils
 from curobo.util.usd_helper import UsdHelper
 from omni.isaac.lab.markers import VisualizationMarkers, VisualizationMarkersCfg 
 import omni.isaac.lab.sim as sim_utils
@@ -14,6 +16,9 @@ from omni.isaac.lab.utils.assets import ISAAC_NUCLEUS_DIR
 import omni.isaac.lab.utils.math as math
 import json_numpy
 import requests
+from collections import deque
+from typing import List
+from dataclasses import field
 json_numpy.patch()
 
 class ServiceName(Enum):
@@ -122,36 +127,50 @@ class GraspAction(Action, action_name="grasp"):
             grasp_pose = None
             while not torch.all(success):
                 grasp_pose, success = grasper.get_grasp(env, self.target, viz=True)
-
+            
+            grasp_pose = grasp_pose.to(env.unwrapped.device)
             # Get pregrasp pose
-            pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+            pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1).to(env.unwrapped.device)
             # Plan motion to pregrasp
-            traj = planner.plan(pregrasp_pose, mode="ee_pose_rel")
+            traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
+            if traj == MotionGenStatus.INVALID_START_STATE_JOINT_LIMITS:
+                return 
+            elif type(traj) == MotionGenStatus:
+                traj = None
 
         # Go to pregrasp pose
-        gripper_action = torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
-        traj = torch.cat((traj, gripper_action), dim=2)
+        gripper_action = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
         for pose_idx in range(traj.shape[1]):
-            yield traj[:, pose_idx]
+            # each pose in traj is our goal pose at each step, turn it into a relative action
+            desired_pose = traj[:, pose_idx]
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, desired_pose)
+            rel_action = torch.cat((rel_pos, rel_euler, gripper_action), dim=-1)
+            yield rel_action
 
         # Go to grasp pose
-        opened_gripper = torch.ones(env.unwrapped.num_envs, 1)
-        go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1).to(env.unwrapped.device)
+        opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        # go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, grasp_pose)
+            go_to_grasp = torch.cat((rel_pos, rel_euler, opened_gripper), dim=-1)
             yield go_to_grasp
 
         # Close gripper
-        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1)
-        close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
+        # close_gripper = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, grasp_pose)
+            close_gripper = torch.cat((rel_pos, rel_euler, closed_gripper), dim=-1)
             yield close_gripper
 
-        planner.update()
         planner.attach_obj(self.target)
+        planner.update()
         
         # Go to pregrasp pose
-        go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        # go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, pregrasp_pose)
+            go_to_pregrasp = torch.cat((rel_pos, rel_euler, closed_gripper), dim=-1)
             yield go_to_pregrasp
 
 @dataclass(frozen=True)
@@ -177,70 +196,90 @@ class PlaceAction(Action, action_name="place"):
             # while not torch.all(success):
             #     place_pose, success = grasper.get_placement(env, self.target)
             
-            place_pose = grasper.get_placement(env, self.target)
+            place_pose = grasper.get_placement(env, self.target).to(env.unwrapped.device)
             # Get pregrasp pose
-            preplace_pose = grasper.get_prepose(place_pose, 0.1)
+            preplace_pose = grasper.get_prepose(place_pose, 0.1).to(env.unwrapped.device)
             # Plan motion to pregrasp
-            traj = planner.plan(preplace_pose, mode="ee_pose")
-        
-        # Go to preplace pose
-        gripper_action = -1 * torch.ones(env.unwrapped.num_envs, traj.shape[1], 1).to(env.unwrapped.device)
-        traj = torch.cat((traj, gripper_action), dim=2)
+            traj = planner.plan(preplace_pose, mode="ee_pose_abs")
+            if traj == MotionGenStatus.INVALID_START_STATE_JOINT_LIMITS:
+                return 
+            elif type(traj) == MotionGenStatus:
+                traj = None
+
+        # Go to pregrasp pose
+        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
         for pose_idx in range(traj.shape[1]):
-            yield traj[:, pose_idx]
+            # each pose in traj is our goal pose at each step, turn it into a relative action
+            desired_pose = traj[:, pose_idx]
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, desired_pose)
+            rel_action = torch.cat((rel_pos, rel_euler, closed_gripper), dim=-1)
+            yield rel_action
+
         # Go to place pose
-        closed_gripper = -1 * torch.ones(env.unwrapped.num_envs, 1)
-        go_to_grasp = torch.cat((place_pose, closed_gripper), dim=1).to(env.unwrapped.device)
+        # go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, place_pose)
+            go_to_grasp = torch.cat((rel_pos, rel_euler, closed_gripper), dim=-1)
             yield go_to_grasp
 
-        # open gripper
-        opened_gripper = torch.ones(env.unwrapped.num_envs, 1)
-        open_gripper = torch.cat((place_pose, opened_gripper), dim=1).to(env.unwrapped.device)
+        # drop object
+        opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
-            yield open_gripper
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, place_pose)
+            close_gripper = torch.cat((rel_pos, rel_euler, opened_gripper), dim=-1)
+            yield close_gripper
 
         planner.detach_obj()
         planner.update()
         
         # Go to pregrasp pose
-        go_to_pregrasp = torch.cat((preplace_pose, opened_gripper), dim=1).to(env.unwrapped.device)
+        # go_to_pregrasp = torch.cat((pregrasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
         for _ in range(self.GRASP_STEPS):
+            rel_pos, rel_euler = planning_utils.relative_action_to_target(env, preplace_pose)
+            go_to_pregrasp = torch.cat((rel_pos, rel_euler, opened_gripper), dim=-1)
             yield go_to_pregrasp
+        
 
 
 @dataclass(frozen=True)
-class RolloutAction(Action, action_name="rollout"):
-    instruction: str
+class RolloutRobomimicAction(Action, action_name="rollout_robomimic"):
+    # instruction: str
     horizon: int = 50
+    keys: List[str] = field(default_factory=lambda: ["rgb"])
 
     def build(self, env):
         # Ensure required services are registered
         # model, processor = Action.get_service(ServiceName.OPEN_VLA)
         #
-        last_img = None
+        last_obs = None
+        obs_buffer = deque(maxlen=1)
         for _ in range(self.horizon):
-            rgb = env.get_camera_data()[0].astype(np.uint8).squeeze()
-            # rgb = [img.astype(np.uint8) for img in rgb]
-            if last_img is None:
-                last_img = rgb
-            obs_horizon = np.stack([last_img, rgb])
+            obs = env.last_obs["policy"]
+            obs_buffer.append(obs)
+            if len(obs_buffer) < 2:
+                obs_buffer.append(obs)
+            obs_horizon = {}
+            for key in self.keys:
+                if key == "rgb":
+
+                    obs_horizon[key] = np.stack([o[key].cpu().numpy().squeeze().transpose(2,0,1) for o in obs_buffer])
+                else:
+                    obs_horizon[key] = np.stack([o[key].cpu().numpy() for o in obs_buffer])
             action = requests.post(
                     "http://0.0.0.0:8000/act",
                     json = {
-                        "image": obs_horizon,
-                        "instruction": self.instruction,
-                        # "unnorm_key": "bridge_orig",
+                        # "image": obs_horizon,
+                        "input": obs_horizon,
+                        # "instruction": self.instruction,
                         }
                     ).json()
-            last_img = rgb
-            
+ 
             # transform gripper action from 0-1 to -1, 1
-            action = action.copy()
-            gripper = action[-1]
-            gripper = 2 * gripper - 1
-            action[-1] = gripper
-        
+            # action = action.copy()
+            # gripper = action[-1]
+            # gripper = 2 * gripper - 1
+            # action[-1] = gripper
+            # action[-1] = 1        
             yield torch.tensor(action).unsqueeze(0)
 
 

@@ -362,6 +362,7 @@ class Grasper:
 
         if 'object_label' in meta_data:
             obj_mask = seg == label_map[meta_data['object_label']] if meta_data['object_label'] in label_map else seg
+            obj_mask = obj_mask.squeeze()
             obj_xyz, obj_rgb = xyz_world[obj_mask], rgb[obj_mask]
             obj_xyz_grid = torch.unique(
                 (obj_xyz[:, :2] / grid_res).round(), dim=0
@@ -545,10 +546,7 @@ class Grasper:
         if len(best_manipulations) == 0:
             pos, quat = torch.zeros(1, 1), torch.zeros(1, 1)
         else:
-            try:
-                pos, quat = self.m2t2_grasp_to_pos_and_quat(best_manipulations)
-            except:
-                breakpoint()
+            pos, quat = self.m2t2_grasp_to_pos_and_quat(best_manipulations)
         
         return (pos, quat), torch.tensor(successes), viz_dict
 
@@ -583,7 +581,15 @@ class Grasper:
         temp = roll
         roll = -pitch
         pitch = temp
-        yaw -= np.pi/2  # rotate to account for rotated frame between M2T2 and Isaac
+        # yaw -= np.pi/2  # rotate to account for rotated frame between M2T2 and Isaac
+        yaw += np.pi/2  # rotate to account for rotated frame between M2T2 and Isaac
+
+        # we need to wrap yaw between the 180deg that are favorable for joint limits
+        # limites should be -pi/2 to pi/2
+        if yaw > np.pi/2:
+            yaw -= np.pi
+        if yaw < -np.pi/2:
+            yaw += np.pi
 
         # Convert the adjusted Euler angles back to quaternion
         adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).view(-1, 4)

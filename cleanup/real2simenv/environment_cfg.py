@@ -66,7 +66,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
-        offset=CameraCfg.OffsetCfg(pos=(-0.01, -0.51, 0.72), rot=(0.763, 0.428, -0.236, -0.422), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(-0.71, 0.955, 1.005), rot=(-0.41, -0.25, 0.45, 0.748), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -137,15 +137,15 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
 class CommandsCfg:
     """Command terms for the MDP."""
 
-    object_pose = mdp.UniformPoseCommandCfg(
-        asset_name="robot",
-        body_name="panda_hand",  # will be set by agent env cfg
-        resampling_time_range=(5.0, 5.0),
-        debug_vis=False,
-        ranges=mdp.UniformPoseCommandCfg.Ranges(
-            pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.3, 0.4), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
-        ),
-    )
+    # object_pose = mdp.UniformPoseCommandCfg(
+    #     asset_name="robot",
+    #     body_name="panda_hand",  # will be set by agent env cfg
+    #     resampling_time_range=(5.0, 5.0),
+    #     debug_vis=False,
+    #     ranges=mdp.UniformPoseCommandCfg.Ranges(
+    #         pos_x=(0.4, 0.6), pos_y=(-0.25, 0.25), pos_z=(0.3, 0.4), roll=(0, 0), pitch=(np.pi, np.pi), yaw=(np.pi, np.pi)
+    #     ),
+    # )
 
 
 @configclass
@@ -203,7 +203,7 @@ class ObservationsCfg:
 
 
         def __post_init__(self):
-            self.enable_corruption = True
+            self.enable_corruption = False
             self.concatenate_terms = False
 
     # observation groups
@@ -226,16 +226,52 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-    reset_carrot = EventTerm(
-            func=mdp.reset_root_state_with_random_orientation,
+    randomize_ee = EventTerm(
+            func=mdp.reset_ee_pose,
             mode="reset",
             params={
-                # "pose_range": {"x": (-0.1, 0.1), "y": (-0.12, 0.2), "z": (0.2, 0.22)}, # normal
-                "pose_range": {"x": (-0.025, 0.025), "y": (-0.025, 0.025), "z": (0.0, 0.0)}, # easy
-                "velocity_range": {},
-                "asset_cfg": SceneEntityCfg("carrot"),
-            },
+                "desired_pose_offset_range": {
+                    "x": (0.3, 0.5),
+                    "y": (-0.2, 0.2),
+                    "z": (0.35, 0.55),
+                    "roll": ((10/10)*np.pi, (10/10)*np.pi),
+                    "pitch": (-(0/10)*np.pi, (0/10)*np.pi),
+                    "yaw": (-(0/10)*np.pi, (0/10)*np.pi),
+                    },
+                "robot_cfg": SceneEntityCfg("robot"),
+                "body_name": "panda_hand",
+                }
             )
+    randomize_cube = EventTerm(
+            func=mdp.reset_root_state_uniform,
+            mode="reset",
+            params={
+                "pose_range": {"x": (-0., 0.), "y": (-0.1, 0.1), "z": (0., 0.)},
+                "velocity_range": {},
+                "asset_cfg": SceneEntityCfg("cube"),
+                },
+            )
+
+    # randomize_joints = EventTerm(
+    #         func= mdp.reset_joints_by_offset,
+    #         mode="reset",
+    #         params={
+    #             "position_range": (-0.5, 0.1),
+    #             "velocity_range": (-0., 0.),
+    #             }
+    #         )
+    # randomize_robot_root = EventTerm(
+
+    # reset_carrot = EventTerm(
+    #         func=mdp.reset_root_state_with_random_orientation,
+    #         mode="reset",
+    #         params={
+    #             # "pose_range": {"x": (-0.1, 0.1), "y": (-0.12, 0.2), "z": (0.2, 0.22)}, # normal
+    #             "pose_range": {"x": (-0.025, 0.025), "y": (-0.025, 0.025), "z": (0.0, 0.0)}, # easy
+    #             "velocity_range": {},
+    #             "asset_cfg": SceneEntityCfg("carrot"),
+    #         },
+    #         )
     # reset_camera = EventTerm(
     #         func=mdp.reset_cam,
     #         mode="reset",
@@ -277,6 +313,13 @@ class TerminationsCfg:
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
 
+    success = DoneTerm(
+            func=mdp.object_reached_pos,
+            params={
+                "threshold": 0.15,
+                "object_cfg": SceneEntityCfg("cube"),
+            }
+            )
     # object_dropping = DoneTerm(
     #     func=mdp.root_height_below_minimum, params={"minimum_height": -0.3, "asset_cfg": SceneEntityCfg("Xform_266")}
     # )

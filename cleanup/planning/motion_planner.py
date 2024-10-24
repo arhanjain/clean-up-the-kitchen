@@ -109,7 +109,7 @@ class MotionPlanner:
         self.kin_model = CudaRobotModel(robot_cfg.kinematics)
         self.env = env
 
-    def plan(self, goal, mode="ee_pose_abs") -> torch.Tensor | None:
+    def plan(self, goal, mode="ee_pose_abs") -> torch.Tensor | MotionGenStatus:
         '''
         Creates a plan to reach the goal position from the current joint position.
         Supports multiple environments, denoted as N.
@@ -153,18 +153,13 @@ class MotionPlanner:
 
         # Differentiate between single and batch planning
         result = None
-        # with torch.enable_grad():
-        #     self.enable_gradients(cu_js)
-        #     self.enable_gradients(ik_goal)
         if len(ik_goal) == 1:
             result = self.motion_gen.plan_single(cu_js, ik_goal[0], self.plan_config)
         else: 
             result = self.motion_gen.plan_batch_env(cu_js, ik_goal, self.plan_config.clone())
         
         if not torch.all(result.success):
-            print("Failed to plan for all environments")
-            print(result.status)
-            return None
+            return result.status
 
         # Extract the trajectories based on single vs batch
         traj = [result.interpolated_plan] if len(ik_goal) == 1 else result.get_paths()
@@ -178,28 +173,25 @@ class MotionPlanner:
             if mode == "ee_pose_abs":
                 return ee_trajs 
             elif mode == "ee_pose_rel":
-                # ee_pos, ee_quat = ee_trajs[:, :-1, :3], ee_trajs[:, :-1, 3:]
-                # next_ee_pos, next_ee_quat = ee_trajs[:, 1:, :3], ee_trajs[:, 1:, 3:]
-                # delta_pos = next_ee_pos - ee_pos
-                # 
-                # ee_euler = []
-                # next_ee_euler = []
-                # for i in range(ee_quat.shape[0]):
-                #     prev = math.euler_xyz_from_quat(ee_quat[i])
-                #     next_ = math.euler_xyz_from_quat(next_ee_quat[i])
-                #     prev = torch.stack(prev, dim=-1)
-                #     next_ = torch.stack(next_, dim=-1)
-                #     ee_euler.append(prev)
-                #     next_ee_euler.append(next_)
-                # ee_euler = torch.stack(ee_euler)
-                # next_ee_euler = torch.stack(next_ee_euler)
-                # delta_euler = next_ee_euler - ee_euler
-                # 
-                # traj = torch.cat((delta_pos, delta_euler), dim=2)
-                # return traj
-                # ee_trajs[1:] = ee_trajs[1:] - ee_trajs[:-1]
-                # return ee_trajs[1:]
-                breakpoint()
+                ee_pos, ee_quat = ee_trajs[:, :-1, :3], ee_trajs[:, :-1, 3:]
+                next_ee_pos, next_ee_quat = ee_trajs[:, 1:, :3], ee_trajs[:, 1:, 3:]
+                delta_pos = next_ee_pos - ee_pos
+
+                ee_euler = []
+                next_ee_euler = []
+                for i in range(ee_quat.shape[0]):
+                    prev = math.euler_xyz_from_quat(ee_quat[i])
+                    next_ = math.euler_xyz_from_quat(next_ee_quat[i])
+                    prev = torch.stack(prev, dim=-1)
+                    next_ = torch.stack(next_, dim=-1)
+                    ee_euler.append(prev)
+                    next_ee_euler.append(next_)
+                ee_euler = torch.stack(ee_euler)
+                next_ee_euler = torch.stack(next_ee_euler)
+                delta_euler = next_ee_euler - ee_euler
+
+                traj = torch.cat((delta_pos, delta_euler), dim=2)
+                return traj
         else:
             raise ValueError("Invalid mode...")
 

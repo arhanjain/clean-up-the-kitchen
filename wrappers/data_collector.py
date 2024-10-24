@@ -43,7 +43,7 @@ class DataCollector(gym.Wrapper):
 
 
 
-    def reset(self, *, seed=None, options=None, skip_save=False):
+    def reset(self, *, seed=None, options={}, skip_save=False):
         if skip_save:
             self._reset_buffer()
         self._save_buffer()

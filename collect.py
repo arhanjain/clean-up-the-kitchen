@@ -64,13 +64,17 @@ def main(cfg: Config):
 
     # Reset environment
     env.reset()
-    time.sleep(0.1)
-    env.reset()
+    # time.sleep(0.1)
+    # env.reset()
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
+            ("grasp", {"target": "cube"}),
+            ("place", {"target": "trash"})
             # ("reach", {"target": "carrot"}),
-            ("rollout", {"instruction": "pick up the carrot", "horizon": 60}),
+            # ("rollout", {"instruction": "pick up the carrot", "horizon": 50}),
+            # ("rollout_robomimic", {"keys": ["ee_pose", "gripper_state", "cube"], "horizon": 100}),
+            # ("rollout_robomimic", {"keys": ["rgb"], "horizon": 50}),
             # ("replay", {"filepath": "./data/pick_carrot/episode_0_rel.npz"}),
     ]
 
@@ -81,14 +85,16 @@ def main(cfg: Config):
             full_plan = orchestrator.generate_plan_from_template(plan_template)
             done, trunc = False, False
             for segment in full_plan:
-                print(segment)
+                # print(segment)
                 obs, rew, done, trunc, info = env.step(segment)
                 if done or trunc:
                     print("Done or truncated!")
                     break
 
-            if not done and not trunc:
-                env.reset()
+            # if the env wasn't ended early by a done, we either failed or ran out of time
+            skip_save = not torch.all(done)
+            print("Resetting environment...", done, trunc)
+            env.reset(skip_save=skip_save)
 
     env.close()
 
