@@ -1,12 +1,12 @@
 [submodule "robomimic"]
-	path = robomimic
+	path = submodules/robomimic
 	url = git@github.com:arhanjain/robomimic.git
 [submodule "droid"]
-	path = droid
+	path = submodules/droid
 	url = git@github.com:arhanjain/droid.git
 [submodule "openvla"]
-	path = openvla
+	path = submodules/openvla
 	url = git@github.com:openvla/openvla.git
 [submodule "rlds_dataset_builder"]
-	path = rlds_dataset_builder
+	path = submodules/rlds_dataset_builder
 	url = git@github.com:arhanjain/rlds_dataset_builder.git
