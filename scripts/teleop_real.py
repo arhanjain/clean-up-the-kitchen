@@ -128,6 +128,7 @@ def collect_trajectory(
         control_timestamps["control_start"] = time_ms()
         if skip_action:
             action_info = env.create_action_dict(np.zeros_like(action))
+            continue
         else:
             print(action)
             action_info = env.step(action)
