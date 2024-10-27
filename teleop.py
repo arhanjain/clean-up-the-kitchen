@@ -66,21 +66,13 @@ def main(cfg: Config):
         rot_action_gain = 2,
         gripper_action_gain = 3,
         )
-    # teleop = Se3Keyboard(
-    #         pos_sensitivity=0.05,
-    #         rot_sensitivity=0.1,
-    #         )
-    # viewport = ViewportCameraController(env, )
 
     # apply wrappers
     env = DataCollector(env, cfg.data_collection, save_dir=f"data/{args_cli.ds_name}")
-    #
-    # teleop.add_callback("O", lambda: env.reset(skip_save=True))
-    # teleop.add_callback("P", lambda: env.reset())
+
     # Reset environment
     obs, _ = env.reset()
     teleop.reset_state()
-    # teleop.reset()
 
     # Simulate environment
     while simulation_app.is_running():

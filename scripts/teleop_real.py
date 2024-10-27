@@ -24,10 +24,10 @@ import gymnasium as gym
 from pathlib import Path
 
 # from cleanup.config import Config
-from droid.droid.robot_env import RobotEnv
-from droid.droid.misc.time import time_ms
-from droid.droid.controllers.oculus_controller import VRPolicy
-from droid.droid.trajectory_utils.trajectory_writer import TrajectoryWriter
+from droid.robot_env import RobotEnv
+from droid.misc.time import time_ms
+from droid.controllers.oculus_controller import VRPolicy
+from droid.trajectory_utils.trajectory_writer import TrajectoryWriter
 
 def collect_trajectory(
     env,
@@ -125,20 +125,26 @@ def collect_trajectory(
         # 	print('Feasible Hz: ', (1000 / comp_time))
 
         # Step Environment #
+        skip_timestep_save = False
         control_timestamps["control_start"] = time_ms()
         if skip_action:
             action_info = env.create_action_dict(np.zeros_like(action))
-            continue
+            skip_timestep_save = True
         else:
-            print(action)
-            action_info = env.step(action)
+            action_threshold = 1e-3
+            if np.all(np.abs(action[:-1]) < action_threshold):
+                action_info = env.create_action_dict(np.zeros_like(action))
+                skip_timestep_save = True
+            else:
+                print(action)
+                action_info = env.step(action)
         action_info.update(controller_action_info)
 
         # Save Data #
         control_timestamps["step_end"] = time_ms()
         obs["timestamp"]["control"] = control_timestamps
         timestep = {"observation": obs, "action": action_info}
-        if save_filepath:
+        if save_filepath and not skip_timestep_save:
             # traj_writer.write_timestep(timestep)
 
             # make obs
@@ -186,7 +192,7 @@ def collect_trajectory(
             return controller_info
 
 def get_last_trajectory(dir):
-    trajs = list(dir.glob("*.h5"))
+    trajs = list(dir.glob("*.npz"))
     if len(trajs) == 0:
         return 0
     return max([int(str(traj).split("_")[-1].split(".")[0]) for traj in trajs]) + 1
@@ -195,7 +201,10 @@ def get_last_trajectory(dir):
 def main():#(cfg: Config):
 
     env = RobotEnv(action_space="cartesian_velocity", gripper_action_space="position")
-    teleop = VRPolicy()
+    teleop = VRPolicy(
+            pos_action_gain=8,
+            rot_action_gain=3,
+            )
 
     ds_dir = Path(f"./data/{args.ds_name}/")
     ds_dir.mkdir(exist_ok=True)
@@ -206,7 +215,7 @@ def main():#(cfg: Config):
             "policy": gym.spaces.Dict({
                 "ee_pose": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
                 "gripper_state": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
-                "rgb": gym.spaces.Box(-np.inf, np.inf, shape=(244, 244, 3), dtype=np.uint8),
+                "rgb": gym.spaces.Box(0, 255, shape=(244, 244, 3), dtype=np.uint8),
             })
         })
     }
@@ -234,7 +243,8 @@ def main():#(cfg: Config):
                 env, 
                 controller=teleop, 
                 save_filepath=str(ds_dir / f"episode_{episode}.npz"),
-                save_images=True
+                save_images=True,
+                wait_for_controller=True,
                 )
         if controller_info["success"]:
             episode += 1

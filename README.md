@@ -34,3 +34,60 @@
 
 **If you reach this point, you have now at least begun data collection successfully. For next steps, reach out to Arhan.**
 
+
+# Teleoperation
+
+## NUC
+
+### Running the Franka Server 
+
+1. **Open 3 Terminal Shells**: This setup requires three separate terminal windows.
+2. **Activate Conda Environment**: In each shell, activate the `arhan-droid` environment with:
+    ```bash
+    conda activate arhan-droid
+    ```
+3. **Navigate to Project Directory**: Change directory to `~/droid/` in each shell:
+    ```bash
+    cd ~/droid/
+    ```
+4. **Run Commands in Order**:
+   - In the first shell, run:
+     ```bash
+     ./droid/franka/launch_robot.py
+     ```
+   - In the second shell, run:
+     ```bash
+     ./droid/franka/launch_gripper.py
+     ```
+   - In the third shell, run:
+     ```bash
+     ./scripts/server/launch_server.py
+     ```
+    > **Hint**: Ensure that both the robot and the gripper are shown as connected in the launch robot/gripper scripts!
+
+## Control PC
+
+The **Control PC** section covers the setup steps specific to the PC used for controlling the teleoperation system.
+
+1. **Activate Conda Environment**: Open a terminal and activate the `auto-articulate` environment:
+    ```bash
+    conda activate auto-articulate
+    ```
+2. **Connect Oculus**: Ensure the Oculus device is properly connected to the Control PC.
+3. **Verify Connection**: Run the following command to check that the Oculus device is recognized:
+    ```bash
+    adb devices
+    ```
+    You should see the Oculus device listed as "attached" if it’s connected correctly.
+4. **Navigate to Project Directory**: Change directory to `~/projects/clean-up-the-kitchen/`:
+    ```bash
+    cd ~/projects/clean-up-the-kitchen/
+    ```
+5. **Run Teleoperation Script**: Start the teleoperation process by running:
+    ```bash
+    python ./scripts/teleop_real [DATASET_NAME]
+    ```
+   Replace `[DATASET_NAME]` with your desired dataset name to save the session’s data.
+
+---
+
