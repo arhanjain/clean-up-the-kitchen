@@ -136,7 +136,8 @@ class GraspAction(Action, action_name="grasp"):
             if traj == MotionGenStatus.INVALID_START_STATE_JOINT_LIMITS:
                 return 
             elif type(traj) == MotionGenStatus:
-                traj = None
+                return
+                # traj = None
 
         # Go to pregrasp pose
         gripper_action = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
@@ -251,8 +252,13 @@ class RolloutRobomimicAction(Action, action_name="rollout_robomimic"):
         # Ensure required services are registered
         # model, processor = Action.get_service(ServiceName.OPEN_VLA)
         #
+
+        requests.post(
+                "http://0.0.0.0:8000/start-episode",
+                json = {}
+                )
         last_obs = None
-        obs_buffer = deque(maxlen=1)
+        obs_buffer = deque(maxlen=2)
         for _ in range(self.horizon):
             obs = env.last_obs["policy"]
             obs_buffer.append(obs)

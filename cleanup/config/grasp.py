@@ -155,7 +155,7 @@ class GraspConfig:
     @dataclass
     class Eval:
         data_dir: str = ''
-        checkpoint: str = '/home/arhan/Downloads/m2t2.pth'
+        checkpoint: str = '/home/arhan/projects/clean-up-the-kitchen/submodules/M2T2/m2t2.pth'
         mask_thresh: float = 0.4
         object_thresh: float = 0.4
         num_runs: int = 1

@@ -10,3 +10,9 @@
 [submodule "rlds_dataset_builder"]
 	path = submodules/rlds_dataset_builder
 	url = git@github.com:arhanjain/rlds_dataset_builder.git
+[submodule "submodules/M2T2"]
+	path = submodules/M2T2
+	url = git@github.com:arhanjain/M2T2.git
+[submodule "submodules/curobo"]
+	path = submodules/curobo
+	url = https://github.com/NVlabs/curobo.git

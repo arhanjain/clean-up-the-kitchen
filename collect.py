@@ -69,12 +69,13 @@ def main(cfg: Config):
 
     orchestrator = Orchestrator(env, cfg)
     plan_template = [
-            ("grasp", {"target": "cube"}),
-            ("place", {"target": "trash"})
+            # ("grasp", {"target": "cube"}),
+            # ("place", {"target": "trash"})
             # ("reach", {"target": "carrot"}),
             # ("rollout", {"instruction": "pick up the carrot", "horizon": 50}),
             # ("rollout_robomimic", {"keys": ["ee_pose", "gripper_state", "cube"], "horizon": 100}),
-            # ("rollout_robomimic", {"keys": ["rgb"], "horizon": 50}),
+            ("rollout_robomimic", {"keys": ["rgb", "ee_pose", "gripper_state"], "horizon": 100}),
+            # ("rollout_robomimic", {"keys": ["rgb"], "horizon": 100}),
             # ("replay", {"filepath": "./data/pick_carrot/episode_0_rel.npz"}),
     ]
 
@@ -92,7 +93,10 @@ def main(cfg: Config):
                     break
 
             # if the env wasn't ended early by a done, we either failed or ran out of time
-            skip_save = not torch.all(done)
+            try:
+                skip_save = not torch.all(done)
+            except:
+                breakpoint()
             print("Resetting environment...", done, trunc)
             env.reset(skip_save=skip_save)
 

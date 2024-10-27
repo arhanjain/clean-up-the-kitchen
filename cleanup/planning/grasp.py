@@ -577,7 +577,7 @@ class Grasper:
 
         # Unpack the tuple
         roll, pitch, yaw = euler_angles
-        
+
         temp = roll
         roll = -pitch
         pitch = temp
@@ -590,7 +590,8 @@ class Grasper:
             yaw -= np.pi
         if yaw < -np.pi/2:
             yaw += np.pi
-
+        
+        # breakpoint()
         # Convert the adjusted Euler angles back to quaternion
         adjusted_quat = math.quat_from_euler_xyz(roll, pitch, yaw).view(-1, 4)
 

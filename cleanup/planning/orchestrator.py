@@ -6,7 +6,6 @@ import torch
 from cleanup.config import Config
 import yaml
 import re
-from transformers import AutoModelForVision2Seq, AutoProcessor
 
 class Orchestrator:
     '''

@@ -54,7 +54,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
         prim_path="/World/light",
         spawn=sim_utils.DomeLightCfg(color=(0.75, 0.75, 0.75), intensity=1500.0),
     )
-
+    
     camera = CameraCfg(
         prim_path="{ENV_REGEX_NS}/table_cam",
         update_period=0.1,
@@ -112,11 +112,11 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
             rot = prim.GetAttribute("xformOp:orient").Get()
             pos = (pos[0], pos[1], pos[2])
             quat = torch.tensor((rot.GetReal(), rot.GetImaginary()[0], rot.GetImaginary()[1], rot.GetImaginary()[2]))
-
-            euler = math.euler_xyz_from_quat(quat.unsqueeze(0))
-            quat = math.quat_from_euler_xyz(euler[0]+np.pi/2, euler[1], euler[2])
-            quat = quat[0]
-
+            #
+            # euler = math.euler_xyz_from_quat(quat.unsqueeze(0))
+            # quat = math.quat_from_euler_xyz(euler[0]+np.pi/2, euler[1], euler[2])
+            # quat = quat[0]
+            #
             name = prim.GetName()
             objs[name] = RigidObjectCfg(
                 prim_path=f"{{ENV_REGEX_NS}}/{name}",

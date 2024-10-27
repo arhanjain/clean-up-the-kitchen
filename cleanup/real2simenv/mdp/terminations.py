@@ -72,14 +72,15 @@ def object_reached_pos(
     robot: RigidObject = env.scene[robot_cfg.name]
     object: RigidObject = env.scene[object_cfg.name]
 
+    # command = torch.tensor([[0.59, 0.16, 0.01]]).to(env.device)
     command = torch.tensor([[0.559, 0.431, 0.166]]).to(env.device)
 
     # compute the desired position in the world frame
     des_pos_b = command[:, :3]
     des_pos_w, _ = combine_frame_transforms(robot.data.root_state_w[:, :3], robot.data.root_state_w[:, 3:7], des_pos_b)
-    des_pow_w_xy = des_pos_w[:, :2]
+    # des_pow_w_xy = des_pos_w[:, :2]
     # distance in xy plane
-    distance = torch.norm(des_pow_w_xy - object.data.root_pos_w[:, :2], dim=1)
+    distance = torch.norm(des_pos_w - object.data.root_pos_w, dim=1)
     # distance of the end-effector to the object: (num_envs,)
     # distance = torch.norm(des_pos_w - object.data.root_pos_w[:, :3], dim=1)
 

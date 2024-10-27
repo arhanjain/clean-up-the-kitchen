@@ -17,7 +17,7 @@ fi
 
 
 echo "Splitting $DATASET_PATH into train and validation sets inplace..."
-python robomimic/robomimic/scripts/split_train_val.py --dataset $DATASET_PATH
+python submodules/robomimic/robomimic/scripts/split_train_val.py --dataset $DATASET_PATH
 
 echo "Training a Diffusion model from scratch on $DATASET_PATH"
 python train.py \
