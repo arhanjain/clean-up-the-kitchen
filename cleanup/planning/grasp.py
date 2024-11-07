@@ -62,15 +62,15 @@ class Grasper:
         # return self.get_manipulation(env, object_class, manipulation_type, viz)
 
     def get_grasp(self, env, object_class, manipulation_type="grasps", viz=True):
-        grasp_pose, success = self.get_manipulation(env, object_class, manipulation_type, viz)
+        # grasp_pose, success = self.get_manipulation(env, object_class, manipulation_type, viz)
         # if success:
         #     base_pos, base_rot = self.get_robot_base_pose(env)
         #     base_transformation = self.compute_base_transformation(base_pos, base_rot)
         #     return (self.adjust_target_pose(grasp_pose, base_transformation), success)
-        return (grasp_pose, success)
-        # pos=[0.80298, 0.0721, 0.1737]
-        # rot=[-0.5,  0.5, -0.5,  0.5]
-        # return (torch.tensor([pos + rot]).float(), torch.tensor([True]))
+        # return (grasp_pose, success)
+        pos=[0.17, -1.445, 0.60]
+        rot=[0.707, 0, 0.707, 0]
+        return (torch.tensor([pos + rot]).float(), torch.tensor([True]))
         
     
     def get_manipulation(self, env, object_class, manipulation_type, viz=True):
@@ -561,10 +561,11 @@ class Grasper:
             distances = torch.norm(torch.stack(avg_obj_pos) - target_obj_pos, dim=1)
             best_obj_idx = torch.argmin(distances)
             # if min(distances) > 0.7:
-            if min(distances) > 0.70:
-                print("evertyhuing too far")
-                successes.append(False)
-                continue
+            # breakpoint()
+            # if min(distances) > 0.16:
+            #     print("evertyhuing too far")
+            #     successes.append(False)
+            #     continue
 
             manipulations = outputs[manipulation_type][i][best_obj_idx]
             manipulation_conf = outputs[conf_key][i][best_obj_idx]

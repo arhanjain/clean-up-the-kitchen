@@ -121,10 +121,14 @@ class GraspAction(Action, action_name="grasp"):
             success = torch.zeros(env.unwrapped.num_envs)
             grasp_pose = None
             while not torch.all(success):
-                grasp_pose, success = grasper.get_grasp(env, self.target, viz=True)
+                pos=[0.18, -0.20, 0.37]
+                rot=[0.707, 0, 0.707, 0]
+                breakpoint()
+                grasp_pose, success = (torch.tensor([pos + rot]).float(), torch.tensor([True]))
+                # grasp_pose, success = grasper.get_grasp(env, self.target, viz=True)
 
             # Get pregrasp pose
-            pregrasp_pose = grasper.get_prepose(grasp_pose, 0.05)
+            pregrasp_pose = grasper.get_prepose(grasp_pose, 0.03)
             # Plan motion to pregrasp
             print("pregrasp_pose", pregrasp_pose)
             traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
@@ -329,12 +333,12 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         if planner is None:
             raise ValueError("Motion planner service not found")
 
-        # planner.motion_gen.clear_world_cache()
-        # planner.update()
+        planner.motion_gen.clear_world_cache()
+        planner.update()
         
         grasp_pose = grasper.get_open_grasp_pose(env)
         # Get pregrasp pose
-        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.1)
+        pregrasp_pose = grasper.get_prepose(grasp_pose, 0.05)
         
         traj = planner.plan(pregrasp_pose, mode="ee_pose_abs")
         if traj is None:
@@ -350,7 +354,7 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         # Go to grasp pose
         opened_gripper = torch.ones(env.unwrapped.num_envs, 1).to(env.unwrapped.device)
         go_to_grasp = torch.cat((grasp_pose, opened_gripper), dim=1)
-        for _ in range(self.GRASP_STEPS - 15):
+        for _ in range(self.GRASP_STEPS - 18):
             yield go_to_grasp
 
         # Close gripper (make the gripper closing slower)
@@ -359,14 +363,14 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         for _ in range(self.GRASP_STEPS - 10):
             yield close_gripper
 
-        # planner.motion_gen.clear_world_cache()
-        # planner.update()
-        # planner.attach_obj('/World/envs/env_0/kitchen01/drawer_01_handle/handle')
+        planner.motion_gen.clear_world_cache()
+        planner.update()
+        planner.attach_obj('/World/envs/env_0/kitchen01/drawer_01_handle/handle')
         print("finished grasp")
 
         # From the current grasp pose, pull the drawer out slowly 
         go_backwards = torch.cat((grasp_pose, closed_gripper), dim=1).to(env.unwrapped.device)
-        for _ in range(self.GRASP_STEPS + 25):
+        for _ in range(self.GRASP_STEPS + 15):
             go_backwards[:, 0] -= 0.01
             go_backwards[:, 1] += 0.005
             yield go_backwards
@@ -375,10 +379,10 @@ class OpenCabinetAction(Action, action_name="open_cabinet"):
         go_backwards[:, -1] = 1
         for _ in range(self.GRASP_STEPS - 15):
             yield go_backwards
-        # planner.motion_gen.clear_world_cache()
-        # planner.update()
+        planner.motion_gen.clear_world_cache()
+        planner.update()
 
-        # planner.detach_obj()
+        planner.detach_obj()
 
 @dataclass(frozen=True)
 class VisualizePCDAction(Action, action_name="visualize"):

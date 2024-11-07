@@ -33,13 +33,13 @@ params:
         drawer_prismatic_joint_10: 0.0
 
   RigidObject:
-    # cleanex:
-    #   path: "/home/raymond/projects/clean-up-the-kitchen/data/segmented_objects/kleanex_test2.usd"
-    #   scale: [100000, 100000, 100000]
-    #   pos: [0.6, 0.27962, 0.4]
-    #   rot:
-    #     axis: [0]
-    #     angles: [-1.57]
+    bottle:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/segmented_objects/bottle_visuals.usda"
+      scale: [2, 2, 2]
+      pos: [0.20, -1.6, 0.55]
+      rot:
+        axis: [0]
+        angles: [-0]
     # master_chef_can:
     #   path: "/home/raymond/projects/clean-up-the-kitchen/data/segmented_objects/idkobject2.usd"
     #   scale: [1, 1, 1]
@@ -54,18 +54,18 @@ params:
         rot:
           axis: [0]
           angles: [-0]
-        # pose_range:
-        #   x: [0.0, 0.10]
-        #   y: [-0.25, 0.05]
-        #   z: [0.0, 0.0]
-        #   yaw: [-1.0, 1.0]
-    # sponge:
-    #   path: "/home/raymond/projects/clean-up-the-kitchen/data/segmented_objects/sponge_test1.usd"
-    #   scale: [2, 2, 2]
-    #   pos: [0.35, -0.80, 0.40738]
-    #   rot:
-    #     axis: [0]
-    #     angles: [0]
+        pose_range:
+          x: [0.0, 0.10]
+          y: [-0.25, 0.05]
+          z: [0.0, 0.0]
+          yaw: [-1.0, 1.0]
+    sponge:
+      path: "/home/raymond/projects/clean-up-the-kitchen/data/segmented_objects/sponge_test1.usd"
+      scale: [2, 2, 2]
+      pos: [0.35, -0.90, 0.40738]
+      rot:
+        axis: [0]
+        angles: [0]
 
     # mustard_bottle:
     #   path: "/home/raymond/projects/clean-up-the-kitchen/data/ycb/Axis_Aligned/006_mustard_bottle.usd"
