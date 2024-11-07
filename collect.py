@@ -34,7 +34,6 @@ from omegaconf import OmegaConf
 from wrappers import DataCollector
 from datetime import datetime
 from cleanup.planning.orchestrator import Orchestrator
-from cleanup.planning.orchestrator import Orchestrator
 import yaml
 from cleanup.config import Config
 import cleanup.real2simenv as real2simenv
@@ -50,17 +49,16 @@ def main(cfg: Config):
         use_fabric=not args_cli.disable_fabric,
     )
     env_cfg.setup(cfg)
-    env_cfg.setup(cfg)
 
     # video wrapper stuff
-    env_cfg.viewer.resolution = cfg.video.viewer_resolution
-    env_cfg.viewer.eye = cfg.video.viewer_eye
-    env_cfg.viewer.lookat = cfg.video.viewer_lookat
-    video_kwargs = cfg.video
-    env_cfg.viewer.resolution = cfg.video.viewer_resolution
-    env_cfg.viewer.eye = cfg.video.viewer_eye
-    env_cfg.viewer.lookat = cfg.video.viewer_lookat
-    video_kwargs = cfg.video
+    # env_cfg.viewer.resolution = cfg.video.viewer_resolution
+    # env_cfg.viewer.eye = cfg.video.viewer_eye
+    # env_cfg.viewer.lookat = cfg.video.viewer_lookat
+    # video_kwargs = cfg.video
+    # env_cfg.viewer.resolution = cfg.video.viewer_resolution
+    # env_cfg.viewer.eye = cfg.video.viewer_eye
+    # env_cfg.viewer.lookat = cfg.video.viewer_lookat
+    # video_kwargs = cfg.video
 
     # create environment
     env = gym.make(args_cli.task, cfg=env_cfg, custom_cfg=cfg, render_mode="rgb_array")
@@ -82,6 +80,7 @@ def main(cfg: Config):
     # Simulate environment
     i = 0
     while simulation_app.is_running():
+
         if env.is_stopped():
             print("Data collection has reached max episodes. Exiting simulation loop.")
             env.close()
@@ -91,6 +90,7 @@ def main(cfg: Config):
         done, trunc = False, False
         while not done and not trunc:
             print("current ee_pose", env.unwrapped.scene["ee_frame"].data.target_pos_source[:, 0])
+
             for segment in orchestrator.run():
                 obs, rew, done, trunc, info = env.step(segment)
                 if done or trunc:

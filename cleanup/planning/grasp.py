@@ -1,5 +1,4 @@
 from PIL import Image
-from sklearn.neighbors import KDTree
 from torch.utils.data import Dataset
 import numpy as np
 import os
@@ -56,17 +55,18 @@ class Grasper:
         # position = [0.6111233234405518, -0.10871953517198563, 0.1809773296117783]
         pos = [0.5, -0.4, 0]
         place_pose = torch.tensor([pos + rot]).float()
-        base_pos, base_rot = self.get_robot_base_pose(env)
-        base_transformation = self.compute_base_transformation(base_pos, base_rot)
-        return self.adjust_target_pose(place_pose, base_transformation)
+        return place_pose
+        # base_pos, base_rot = self.get_robot_base_pose(env)
+        # base_transformation = self.compute_base_transformation(base_pos, base_rot)
+        # return self.adjust_target_pose(place_pose, base_transformation)
         # return self.get_manipulation(env, object_class, manipulation_type, viz)
 
     def get_grasp(self, env, object_class, manipulation_type="grasps", viz=True):
         grasp_pose, success = self.get_manipulation(env, object_class, manipulation_type, viz)
-        if success:
-            base_pos, base_rot = self.get_robot_base_pose(env)
-            base_transformation = self.compute_base_transformation(base_pos, base_rot)
-            return (self.adjust_target_pose(grasp_pose, base_transformation), success)
+        # if success:
+        #     base_pos, base_rot = self.get_robot_base_pose(env)
+        #     base_transformation = self.compute_base_transformation(base_pos, base_rot)
+        #     return (self.adjust_target_pose(grasp_pose, base_transformation), success)
         return (grasp_pose, success)
         # pos=[0.80298, 0.0721, 0.1737]
         # rot=[-0.5,  0.5, -0.5,  0.5]
@@ -161,9 +161,10 @@ class Grasper:
         ], dim=-1)
         pregrasp = pose.clone()
         pregrasp[:, :3] -= offset * direction
-        base_pos, base_rot = self.get_robot_base_pose(self._env)
-        base_transformation = self.compute_base_transformation(base_pos, base_rot)
-        return self.adjust_target_pose(pregrasp, base_transformation)
+        # base_pos, base_rot = self.get_robot_base_pose(self._env)
+        # base_transformation = self.compute_base_transformation(base_pos, base_rot)
+        # return self.adjust_target_pose(pregrasp, base_transformation)
+        return pregrasp
 
     def sample_manipulations(self, outputs, num_manipulations, manipulation_type):
         '''
@@ -559,12 +560,11 @@ class Grasper:
             target_obj_pos = target_obj_pos.cpu()
             distances = torch.norm(torch.stack(avg_obj_pos) - target_obj_pos, dim=1)
             best_obj_idx = torch.argmin(distances)
-            if min(distances) > 0.19:
+            # if min(distances) > 0.7:
+            if min(distances) > 0.70:
                 print("evertyhuing too far")
                 successes.append(False)
                 continue
-
-
 
             manipulations = outputs[manipulation_type][i][best_obj_idx]
             manipulation_conf = outputs[conf_key][i][best_obj_idx]
@@ -596,7 +596,7 @@ class Grasper:
                 pos, quat = self.m2t2_grasp_to_pos_and_quat(best_manipulations)
             except:
                 breakpoint()
-        
+        print("output" , pos, quat)
         return (pos, quat), torch.tensor(successes), viz_dict
 
     
@@ -873,12 +873,16 @@ class Grasper:
     
     def get_open_grasp_pose(self, env):
         init_pos = torch.as_tensor([0.5, 0.0, 0.70, 0.707, 0, 0.707, 0]).to(env.unwrapped.device)
-        handle_id, handle_name = env.scene["kitchen02"].find_bodies("drawer_05_handle")
-        handle_location = env.scene["kitchen02"]._data.body_state_w[0][handle_id][:, :3]
-        offset = torch.tensor([-0.08, 0.00, 0.00]).to(env.unwrapped.device)
+        handle_id, handle_name = env.scene["kitchen01"].find_bodies("drawer_01_handle")
+        handle_location = env.scene["kitchen01"]._data.body_state_w[0][handle_id][:, :3]
+        # curobo gripper and isaacsim gripper different
+        # offset = torch.tensor([-0.07, 0.01, 0.07]).to(env.unwrapped.device)
+
+        offset = torch.tensor([-0.10, 0.05, 0.07]).to(env.unwrapped.device)
         init_pos[:3] = handle_location + offset
-        base_pos, base_rot = self.get_robot_base_pose(env)
-        base_transformation = self.compute_base_transformation(base_pos, base_rot)
-        return self.adjust_target_pose(init_pos, base_transformation)
+        return init_pos.unsqueeze(0)
+        # base_pos, base_rot = self.get_robot_base_pose(env)
+        # base_transformation = self.compute_base_transformation(base_pos, base_rot)
+        # return self.adjust_target_pose(init_pos, base_transformation)
 
 

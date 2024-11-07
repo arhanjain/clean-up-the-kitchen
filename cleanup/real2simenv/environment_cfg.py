@@ -47,6 +47,45 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     # robots: will be populated by agent env cfg
     robot: ArticulationCfg = FRANKA_PANDA_HIGH_PD_CFG.replace(
         prim_path="{ENV_REGEX_NS}/Robot",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=
+            f"{ISAAC_NUCLEUS_DIR}/Robots/Franka/franka_instanceable.usd",
+            activate_contact_sensors=False,
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False,
+                max_depenetration_velocity=5.0,
+            ),
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=False,
+                solver_position_iteration_count=12,
+                solver_velocity_iteration_count=1),
+        ),
+        actuators={
+            "panda_shoulder":
+            ImplicitActuatorCfg(
+                joint_names_expr=["panda_joint[1-4]"],
+                effort_limit=87.0,
+                velocity_limit=2.175,
+                stiffness=80.0,
+                damping=4.0,
+            ),
+            "panda_forearm":
+            ImplicitActuatorCfg(
+                joint_names_expr=["panda_joint[5-7]"],
+                effort_limit=12.0,
+                velocity_limit=2.61,
+                stiffness=80.0,
+                damping=4.0,
+            ),
+            "panda_hand":
+            ImplicitActuatorCfg(
+                joint_names_expr=["panda_finger_joint.*"],
+                effort_limit=200.0,
+                velocity_limit=0.2,
+                stiffness=2e3,
+                damping=1e2,
+            ),
+        },
     )
 
     # plane
@@ -74,8 +113,10 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
             focal_length=25.0, focus_distance=400.0, horizontal_aperture=20.955,# clipping_range=(0.05, 2.0)
         ),
         # offset=CameraCfg.OffsetCfg(pos=(-0.23, 0.93, 0.66486), rot=(-0.2765, -0.20009, 0.5544, 0.75905), convention="opengl"), # old env
-        offset=CameraCfg.OffsetCfg(pos=(-0.2411, -1.08517, 0.81276), rot=(0.81133, 0.50206, -0.15885, -0.25388), convention="opengl"), # kitchen
-        # offset=CameraCfg.OffsetCfg(pos=(-0.59371, -1.10056, 0.76485), rot=(0.75146, 0.53087, -0.22605, -0.31999), convention="opengl"),
+        # offset=CameraCfg.OffsetCfg(pos=(-0.86629, -0.8029, 1.11052), rot=(0.71244, 0.45948, -0.28887, -0.44481), convention="opengl"), # kitchen
+        # offset=CameraCfg.OffsetCfg(pos=(0.63017, -0.15516, 0.54135), rot=(0.66187, 0.15051, 0.16079, 0.71653), convention="opengl"), # kitchen
+
+        offset=CameraCfg.OffsetCfg(pos=(-0.14565, -0.58027, 0.62335), rot=(0.79323, 0.45895, -0.20176, -0.34561), convention="opengl"),
         semantic_filter="class:*",
         colorize_semantic_segmentation=False,
     )
@@ -87,7 +128,7 @@ class Real2SimSceneCfg(InteractiveSceneCfg):
     
     def load_kitchen_config(self):
         # Load the YAML file
-        with open('/home/raymond/projects/clean-up-the-kitchen/cleanup/config/kitchen02.yaml', 'r') as f:
+        with open('/home/raymond/projects/clean-up-the-kitchen/cleanup/config/kitchen03.yaml', 'r') as f:
             kitchen_cfg = yaml.safe_load(f)
         current_path = os.getcwd()
         articulation_objects = kitchen_cfg['params'].get('ArticulationObject', {})
@@ -281,7 +322,7 @@ class ObservationsCfg:
 
         rgb = ObsTerm(func=mdp.get_camera_data, params={"type": "rgb"})
         depth = ObsTerm(func=mdp.get_camera_data, params={"type": "distance_to_image_plane"})
-        pcd = ObsTerm(func=mdp.get_point_cloud)
+        # pcd = ObsTerm(func=mdp.get_point_cloud)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -309,25 +350,25 @@ class EventCfg:
     """Configuration for events."""
 
     reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
-    randomize_ee_start_position = EventTerm(func=mdp.randomize_ee_start_position, mode="reset")
+    # randomize_ee_start_position = EventTerm(func=mdp.randomize_ee_start_position, mode="reset")
     
-    reset_base = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {
-                "x": (-0.0, 0.0),
-                "y": (-0.0, 0.0),
-                "yaw": (-0.52, 0.52)
-            },
-            "velocity_range": {
-                "x": (-0.05, 0.05),
-                "y": (-0.05, 0.05),
-                "z": (-0.05, 0.05),
-            },
-            "asset_cfg": SceneEntityCfg("robot"),
-        },
-    )
+    # reset_base = EventTerm(
+    #     func=mdp.reset_root_state_uniform,
+    #     mode="reset",
+    #     params={
+    #         "pose_range": {
+    #             "x": (-0.0, 0.0),
+    #             "y": (-0.0, 0.0),
+    #             "yaw": (-0.52, 0.52)
+    #         },
+    #         "velocity_range": {
+    #             "x": (-0.05, 0.05),
+    #             "y": (-0.05, 0.05),
+    #             "z": (-0.05, 0.05),
+    #         },
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #     },
+    # )
 
     #scurrent ee pos tensor([[0.3439, 0.0576, 0.5556]], device='cuda:0')            "pose_range": {"x": (-0.2, 0.2), "y": (-0.5, 0.5), "z": (-0.4, 0.4)},
     #             "velocity_range": {},

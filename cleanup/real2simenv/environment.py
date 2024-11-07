@@ -50,31 +50,32 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
         obs, rew, done, trunc, info = self.step(action)
         return obs, info
 
-
     def get_joint_info(self):
-        '''
-        Get joint information of the Franka robot entity in the scene,
-        for all N environemnts.
+            '''
+            Get joint information of the Franka robot entity in the scene,
+            for all N environemnts.
 
-        Returns
-        -------
-        joint_pos : torch.Tensor((N, 7)), dtype=torch.float32)
-            Joint positions of the robot entity in the scene.
-        joint_vel : torch.Tensor((N, 7)), dtype=torch.float32)
-            Joint velocities of the robot entity in the scene.
-        joint_names : list
-            List of joint names of the robot entity in the scene.
-        '''
+            Returns
+            -------
+            joint_pos : torch.Tensor((N, 7)), dtype=torch.float32)
+                Joint positions of the robot entity in the scene.
+            joint_vel : torch.Tensor((N, 7)), dtype=torch.float32)
+                Joint velocities of the robot entity in the scene.
+            joint_names : list
+                List of joint names of the robot entity in the scene.
+            '''
 
-        # Specify robot-specific parameters
-        robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
-        robot_entity_cfg.resolve(self.scene)
+            # Specify robot-specific parameters
+            robot_entity_cfg = SceneEntityCfg("robot", joint_names=["panda_joint.*"], body_names=["panda_hand"])
+            robot_entity_cfg.resolve(self.scene)
 
 
-        joint_pos = self.scene["robot"].data.joint_pos[:, robot_entity_cfg.joint_ids]
-        joint_vel = self.scene["robot"].data.joint_vel[:, robot_entity_cfg.joint_ids]
-        joint_names = self.scene["robot"].data.joint_names
-        return joint_pos, joint_vel, joint_names
+            joint_pos = self.scene["robot"].data.joint_pos[:, robot_entity_cfg.joint_ids]
+            joint_vel = self.scene["robot"].data.joint_vel[:, robot_entity_cfg.joint_ids]
+            joint_names = self.scene["robot"].data.joint_names
+
+            return joint_pos, joint_vel, joint_names
+
 
     def get_object_pose(self, object_name: str):
         pos_w = self.scene[object_name].data.root_pos_w
@@ -91,6 +92,36 @@ class Real2SimRLEnv(ManagerBasedRLEnv):
 
         return pos_r, quat_r
 
+
+
+    def visualize_pointcloud_open3d(self, points, colors=None):
+        import open3d as o3d
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+        if colors is not None:
+            pcd.colors = o3d.utility.Vector3dVector(colors / 255.0)
+        o3d.visualization.draw_geometries([pcd])
+
+    def depth_to_pointcloud(self, depth, intrinsics):
+        """
+        Converts depth image to a point cloud.
+        depth: (H, W)
+        intrinsics: (3, 3)
+        Returns: (H*W, 3)
+        """
+        h, w, _ = depth.shape
+        i, j = np.meshgrid(np.arange(w), np.arange(h), indexing='xy')
+        i = i.flatten()
+        j = j.flatten()
+        z = depth.flatten()
+        valid = z > 0
+
+        x = (i[valid] - intrinsics[0, 2]) * z[valid] / intrinsics[0, 0]
+        y = (j[valid] - intrinsics[1, 2]) * z[valid] / intrinsics[1, 1]
+        z = z[valid]
+
+        points = np.vstack((x, y, z)).transpose()
+        return points
 
 
     def get_camera_data(self):

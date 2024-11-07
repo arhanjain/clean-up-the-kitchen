@@ -56,7 +56,7 @@ class DataCollector(gym.Wrapper):
         self.data_collector.add("obs/joint_state", obs["joint_state"])
         self.data_collector.add("obs/handle_pose", obs["handle_pose"])
         self.data_collector.add("actions", action)
-        self.data_collector.add("obs/pcd", obs["pcd"])
+        # self.data_collector.add("obs/pcd", obs["pcd"])
         # Optionally add rewards and dones if needed
         # self.data_collector.add("rewards", np.array([reward]))
         # self.data_collector.add("dones", np.array([done]))
